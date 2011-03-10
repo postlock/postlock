@@ -163,7 +163,7 @@ digest_authenticate(_Challenge, Response) ->
     UsersDict = dict:from_list(UsersList),
 
     case dict:find(Username, UsersDict) of
-        error -> {error, username_not_found};
+        error -> {error, unknown_user};
         {ok, Password} ->
             A1 = postlock_test_util:md5_string(string:join([Username, Realm, Password], ":")),
             A2 = postlock_test_util:md5_string(string:join(["POST", Uri], ":")),

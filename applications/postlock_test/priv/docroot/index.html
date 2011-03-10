@@ -30,6 +30,25 @@ module("connection");
             }).connect();
     });
 
+    // If we give the postlock server a non-existing username,
+    // the server should drop the websocket connection.
+    test("unknown user", function() {
+      var cb_invocation = 0;
+      expect(2);
+      stop();
+      mkPostlock({
+        url: backend_url, 
+        username: 'test_username_x', 
+        password: 'test_username_x'}).set_cb('connection_state_change', 
+            function(oldstate, newstate, msg) {
+                cb_invocation++;
+                if (cb_invocation === 1) ok(oldstate === 'idle' && newstate === 'auth', 'idle->auth');
+                if (cb_invocation === 2) ok(oldstate === 'auth' &&  newstate === 'idle', 'auth->idle');
+            }).set_cb('ws_onclose', function() {
+                start();
+            }).connect();
+    });
+
     // For a successful connection, we should end up in the 'connected' state
     // and our session_id and participant_id should be set.
     test("success", function() {
