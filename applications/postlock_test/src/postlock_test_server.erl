@@ -136,7 +136,7 @@ digest_auth_challenge() ->
     random:seed(A1, A2, A3),
     {struct, [
         {"challenge_type", "digest"},
-        {"realm", "localhost"}, % TODO: hostname
+        {"realm", inet:gethostname()},
         {"uri", "/backend.yaws"},
         {"qop", "auth"},
         {"algorithm", "MD5"},
