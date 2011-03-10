@@ -132,19 +132,21 @@ trivial_authenticate(_Challenge, Response) ->
     end.
 
 digest_auth_challenge() ->
+    {A1, A2, A3} = now(),
+    random:seed(A1, A2, A3),
     {struct, [
         {"challenge_type", "digest"},
         {"realm", "localhost"}, % TODO: hostname
         {"uri", "/backend.yaws"},
         {"qop", "auth"},
         {"algorithm", "MD5"},
-        {"nonce", "1234"}, % TODO: random
+        {"nonce", float_to_list(random:uniform())},
         {"opaque", "1234"} % TODO: what's this?
     ]}.
 
 digest_authenticate(_Challenge, Response) ->
     {struct, [
-        _, {_, Realm}, {_, Uri}, {_, Qop}, _, _, {_, Nonce}, _
+        _, {_, Realm}, {_, Uri}, {_, Qop}, _, {_, Nonce}, _
     ]} = _Challenge,
     Username = json:obj_fetch(username, Response),
     ResponseHash = json:obj_fetch(response, Response),

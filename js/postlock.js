@@ -779,7 +779,7 @@ var mkPostlock = function (spec) {
                         var HA1 = algorithm([spec.username, realm, spec.password].join(":"));
                         var HA2 = algorithm(["POST", uri].join(":"));
                         var nc = "00000001";
-                        var cnonce =  Math.random();
+                        var cnonce =  Math.random().toString();
                         var response = algorithm([HA1, nonce, nc, cnonce, qop, HA2].join(":"));
 
                         return {
