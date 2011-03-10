@@ -141,24 +141,25 @@ digest_auth_challenge() ->
         {"qop", "auth"},
         {"algorithm", "MD5"},
         {"nonce", float_to_list(random:uniform())},
-        {"opaque", "1234"} % TODO: what's this?
+        {"opaque", float_to_list(random:uniform())}
     ]}.
 
 digest_authenticate(_Challenge, Response) ->
     {struct, [
-        _, {_, Realm}, {_, Uri}, {_, Qop}, _, {_, Nonce}, _
+        _, {_, Realm}, {_, Uri}, {_, Qop}, _, {_, Nonce}, {_, Opaque}
     ]} = _Challenge,
     Username = json:obj_fetch(username, Response),
     ResponseHash = json:obj_fetch(response, Response),
     Nc = json:obj_fetch(nc, Response),
     Cnonce = json:obj_fetch(cnonce, Response),
+    ResponseOpaque = json:obj_fetch(opaque, Response),
 
     % TODO: store users in a list
     A1 = postlock_test_util:md5_string(string:join(["test_username_1", Realm, "test_password_1"], ":")),
     A2 = postlock_test_util:md5_string(string:join(["POST", Uri], ":")),
     ExpectedResponseHash = postlock_test_util:md5_string(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")),
 
-    case ResponseHash == ExpectedResponseHash of
+    case ResponseOpaque == Opaque andalso ResponseHash == ExpectedResponseHash of
         true -> {ok, Username};
         false -> {error, bad_password}
     end.
