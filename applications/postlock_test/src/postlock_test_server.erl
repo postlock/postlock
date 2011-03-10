@@ -136,7 +136,7 @@ digest_auth_challenge() ->
     random:seed(A1, A2, A3),
     {struct, [
         {"challenge_type", "digest"},
-        {"realm", inet:gethostname()},
+        {"realm", "aaa"},
         {"uri", "/backend.yaws"},
         {"qop", "auth"},
         {"algorithm", "MD5"},
@@ -154,14 +154,25 @@ digest_authenticate(_Challenge, Response) ->
     Cnonce = json:obj_fetch(cnonce, Response),
     ResponseOpaque = json:obj_fetch(opaque, Response),
 
-    % TODO: store users in a list
-    A1 = postlock_test_util:md5_string(string:join(["test_username_1", Realm, "test_password_1"], ":")),
-    A2 = postlock_test_util:md5_string(string:join(["POST", Uri], ":")),
-    ExpectedResponseHash = postlock_test_util:md5_string(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")),
+    % TODO: don't hardcode user list
+    % TODO: store password hash instead of plaintext password 
+    UsersList = [
+        {"test_username_0", "test_password_0"},
+        {"test_username_1", "test_password_1"}
+    ],
+    UsersDict = dict:from_list(UsersList),
 
-    case ResponseOpaque == Opaque andalso ResponseHash == ExpectedResponseHash of
-        true -> {ok, Username};
-        false -> {error, bad_password}
+    case dict:find(Username, UsersDict) of
+        error -> {error, username_not_found};
+        {ok, Password} ->
+            A1 = postlock_test_util:md5_string(string:join([Username, Realm, Password], ":")),
+            A2 = postlock_test_util:md5_string(string:join(["POST", Uri], ":")),
+            ExpectedResponseHash = postlock_test_util:md5_string(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")),
+
+            case ResponseOpaque == Opaque andalso ResponseHash == ExpectedResponseHash of
+                true -> {ok, Username};
+                false -> {error, bad_password}
+            end
     end.
 
 
