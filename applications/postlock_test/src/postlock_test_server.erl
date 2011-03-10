@@ -48,8 +48,8 @@ init([]) ->
     % start a new postlock session for test clients.
     {ok, CbServer} = plCallbackMgr:start_link(),
     % initialize authentication functions in CbServer
-    gen_server:cast(CbServer,{set_callback, {auth_challenge, fun trivial_auth_challenge/0}}),
-    gen_server:cast(CbServer,{set_callback, {authenticate, fun trivial_authenticate/2}}),
+    gen_server:cast(CbServer,{set_callback, {auth_challenge, fun digest_auth_challenge/0}}),
+    gen_server:cast(CbServer,{set_callback, {authenticate, fun digest_authenticate/2}}),
     case gen_server:call(plRegistry,{new_session, CbServer}) of
         {ok, {SessionId, SessionServer}} -> 
             {ok, #state{
@@ -130,3 +130,50 @@ trivial_authenticate(_Challenge, Response) ->
         true -> {ok, Username};
         false -> {error, bad_password}
     end.
+
+digest_auth_challenge() ->
+    {struct, [
+        {"challenge_type", "digest"},
+        {"realm", "localhost"}, % TODO: hostname
+        {"uri", "/backend.yaws"},
+        {"qop", "auth"},
+        {"algorithm", "MD5"},
+        {"nonce", "1234"}, % TODO: random
+        {"opaque", "1234"} % TODO: what's this?
+    ]}.
+
+digest_authenticate(_Challenge, Response) ->
+    {struct, [
+        _, {_, Realm}, {_, Uri}, {_, Qop}, _, _, {_, Nonce}, _
+    ]} = _Challenge,
+    Username = json:obj_fetch(username, Response),
+    ResponseHash = json:obj_fetch(response, Response),
+    Nc = json:obj_fetch(nc, Response),
+    Cnonce = json:obj_fetch(cnonce, Response),
+
+    % TODO: store users in a list
+    % TODO: DRY
+    A1 = hex(binary_to_list(crypto:md5(string:join(["test_username_1", Realm, "test_password_1"], ":")))),
+    A2 = hex(binary_to_list(crypto:md5(string:join(["POST", Uri], ":")))),
+    ExpectedResponseHash = hex(binary_to_list(crypto:md5(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")))),
+
+    case ResponseHash == ExpectedResponseHash of
+        true -> {ok, Username};
+        false -> {error, bad_password}
+    end.
+
+% TODO: move these to a "util" module
+digit_to_xchar(D) when (D >= 0) and (D < 10) ->
+    D + 48;
+digit_to_xchar(D) ->
+    D + 87.
+
+hex(S) ->
+    hex(S, []).
+hex([], Res) ->
+    lists:reverse(Res);
+hex([N | Ns], Res) ->
+    hex(Ns, [digit_to_xchar(N rem 16),
+    digit_to_xchar(N div 16) | Res]).
+
+

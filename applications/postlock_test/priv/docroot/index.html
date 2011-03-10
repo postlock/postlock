@@ -3,6 +3,7 @@
 <link href="http://localhost:8081/qunit.css" rel="stylesheet" type="text/css" />
 <script type="text/javascript" src="http://localhost:8081/jquery-1.4.4.min.js"></script>
 <script type="text/javascript" src="http://localhost:8081/qunit.js"></script>
+<script type="text/javascript" src="http://localhost:8081/MD5.js"></script>
 <script type="text/javascript" src="http://localhost:8081/postlock.js"></script>
 <script type="text/javascript">
 var backend_url = "ws://" + document.location.href.slice(7) + "backend.yaws";
@@ -18,8 +19,8 @@ module("connection");
       stop();
       mkPostlock({
         url: backend_url, 
-        username: 'test_user_1', 
-        password: 'test_user_2'}).set_cb('connection_state_change', 
+        username: 'test_username_1', 
+        password: 'wrongpass'}).set_cb('connection_state_change', 
             function(oldstate, newstate, msg) {
                 cb_invocation++;
                 if (cb_invocation === 1) ok(oldstate === 'idle' && newstate === 'auth', 'idle->auth');
@@ -37,8 +38,8 @@ module("connection");
       stop();
       var postlock = mkPostlock({
         url: backend_url, 
-        username: 'test_user_1', 
-        password: 'test_user_1'}).set_cb('connection_state_change', 
+        username: 'test_username_1', 
+        password: 'test_password_1'}).set_cb('connection_state_change', 
             function(oldstate, newstate, msg) {
                 cb_invocation++;
                 if (cb_invocation === 1) ok(oldstate === 'idle' && newstate === 'auth', 'idle->auth');
@@ -84,8 +85,8 @@ module("messages");
             (function(o) {
                 o.postlock = mkPostlock({
                     url: backend_url, 
-                    username: 'user_'+i, 
-                    password: 'user_'+i}).set_cb(
+                    username: 'test_username_'+i, 
+                    password: 'test_password_'+i}).set_cb(
                   'connected', function() {
                       var i=0, result = true;
                       o.connected = true;

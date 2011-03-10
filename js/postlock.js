@@ -759,6 +759,35 @@ var mkPostlock = function (spec) {
                 auth: {
                     trivial: function() {
                         return {username: spec.username, password: spec.password};
+                    },
+                    digest: function(msg_obj) {
+                        var realm = msg_obj.body.realm || throw_ex("no realm provided", {msg_body: msg_obj.bodyj});
+                        var uri = msg_obj.body.uri || throw_ex("no uri provided", {msg_body: msg_obj.bodyj});
+                        var nonce = msg_obj.body.nonce || throw_ex("no nonce provided", {msg_body: msg_obj.bodyj});
+                        var algorithm = msg_obj.body.algorithm || throw_ex("no algorithm provided", {msg_body: msg_obj.bodyj});
+                        if (typeof(window[algorithm]) === "function") {
+                            // TODO: get rid of window, don't use the global namesapce.
+                            algorithm = window[algorithm];
+                        } else {
+                            throw_ex("algorithm not implemented", {algorithm: algorithmj});
+                        }
+                        var qop = msg_obj.body.qop || throw_ex("no qop provided", {msg_body: msg_obj.bodyj});
+                        if (qop != "auth") {
+                            throw_ex("qop not supported", {qop: qop});
+                        }
+
+                        var HA1 = algorithm([spec.username, realm, spec.password].join(":"));
+                        var HA2 = algorithm(["POST", uri].join(":"));
+                        var nc = "00000001";
+                        var cnonce =  Math.random();
+                        var response = algorithm([HA1, nonce, nc, cnonce, qop, HA2].join(":"));
+
+                        return {
+                            username: spec.username,
+                            nc: nc,
+                            cnonce: cnonce,
+                            response: response,
+                        };
                     }
                 },
                 // handle_incoming_msg.current is overwritten when a state change requires incoming messages
