@@ -154,28 +154,13 @@ digest_authenticate(_Challenge, Response) ->
     Cnonce = json:obj_fetch(cnonce, Response),
 
     % TODO: store users in a list
-    % TODO: DRY
-    A1 = hex(binary_to_list(crypto:md5(string:join(["test_username_1", Realm, "test_password_1"], ":")))),
-    A2 = hex(binary_to_list(crypto:md5(string:join(["POST", Uri], ":")))),
-    ExpectedResponseHash = hex(binary_to_list(crypto:md5(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")))),
+    A1 = postlock_test_util:md5_string(string:join(["test_username_1", Realm, "test_password_1"], ":")),
+    A2 = postlock_test_util:md5_string(string:join(["POST", Uri], ":")),
+    ExpectedResponseHash = postlock_test_util:md5_string(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")),
 
     case ResponseHash == ExpectedResponseHash of
         true -> {ok, Username};
         false -> {error, bad_password}
     end.
-
-% TODO: move these to a "util" module
-digit_to_xchar(D) when (D >= 0) and (D < 10) ->
-    D + 48;
-digit_to_xchar(D) ->
-    D + 87.
-
-hex(S) ->
-    hex(S, []).
-hex([], Res) ->
-    lists:reverse(Res);
-hex([N | Ns], Res) ->
-    hex(Ns, [digit_to_xchar(N rem 16),
-    digit_to_xchar(N div 16) | Res]).
 
 
