@@ -2,3 +2,4 @@
 *.swp
 *.swo
 *~
+postlock_server/src/Emakefile
