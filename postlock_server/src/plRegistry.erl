@@ -56,8 +56,8 @@ init(_) ->
 %%--------------------------------------------------------------------
 %% Creates a new sync server with a brand new client id, then registers
 %% the sync server with the state server responsible for the session.
-handle_call({new_session, Callback}, _From, State) ->
-    Reply = create_session(Callback),
+handle_call({new_session, ApplicationProcess}, _From, State) ->
+    Reply = create_session(ApplicationProcess),
     {reply, Reply, State};
 
 handle_call(Request, _From, State) ->
@@ -131,9 +131,9 @@ get_next_session_id() ->
 %% callback server is connected. A new record is created in the 
 %% postlock_session mnesia table.
 %%--------------------------------------------------------------------
-create_session(Callback) ->
+create_session(ApplicationProcess) ->
     SessionId = get_next_session_id(),
-    case plSession:start_link([SessionId, Callback]) of
+    case plSession:start_link([SessionId, ApplicationProcess]) of
         {ok, Pid} ->
             %% write new session record to mnesia
             mnesia:transaction(fun() -> mnesia:write(#postlock_session{

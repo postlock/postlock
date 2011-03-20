@@ -18,10 +18,14 @@
 
 -record(state, {
     session_server,
-    sessionid,
-    callback_server
+    sessionid
 }).
+
 -define(SERVER, ?MODULE).
+-define(USERLIST, [
+        {"test_username_0", "test_password_0"},
+        {"test_username_1", "test_password_1"}
+]).
 %%====================================================================
 %% API
 %%====================================================================
@@ -44,18 +48,11 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
-
-    % start a new postlock session for test clients.
-    {ok, CbServer} = plCallbackMgr:start_link(),
-    % initialize authentication functions in CbServer
-    gen_server:cast(CbServer,{set_callback, {auth_challenge, fun digest_auth_challenge/0}}),
-    gen_server:cast(CbServer,{set_callback, {authenticate, fun digest_authenticate/2}}),
-    case gen_server:call(plRegistry,{new_session, CbServer}) of
+    case gen_server:call(plRegistry,{new_session, ?SERVER}) of
         {ok, {SessionId, SessionServer}} -> 
             {ok, #state{
                 sessionid=SessionId,
-                session_server=SessionServer,
-                callback_server=CbServer
+                session_server=SessionServer
                 }};
         {error, Reason} -> {stop, Reason}
     end.
@@ -69,8 +66,23 @@ init([]) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
+
 handle_call({get_session}, _From, State) ->
     {reply, {State#state.sessionid, State#state.session_server}, State};
+
+%% stub function, doesnt actually do anything:
+handle_call({sanitize_client_options, Options}, _From, State) ->
+    {reply, Options, State};
+
+handle_call({get_password, Username}, _From, State) ->
+    Reply = case lists:keyfind(Username, 1, ?USERLIST) of
+        {Username, Password} -> 
+            {ok, Password};
+        false ->
+            {error, bad_username}
+    end,
+    {reply, Reply, State};
+
 
 handle_call(Request, _From, State) ->
     io:format("Unhandled request sent to postlock_test_cb:handle_call - ~p~n",[Request]),
@@ -113,66 +125,4 @@ terminate(_Reason, _State) ->
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-%%--------------------------------------------------------------------
-%%% Internal functions
-%%--------------------------------------------------------------------
-
-trivial_auth_challenge() ->
-    {struct, [
-        {"challenge_type", "trivial"}
-    ]}.
-
-trivial_authenticate(_Challenge, Response) ->
-    Username = json:obj_fetch(username, Response),
-    Password = json:obj_fetch(password, Response),
-    case Username == Password of
-        true -> {ok, Username};
-        false -> {error, bad_password}
-    end.
-
-digest_auth_challenge() ->
-    {A1, A2, A3} = now(),
-    random:seed(A1, A2, A3),
-    {struct, [
-        {"challenge_type", "digest"},
-        {"realm", "aaa"},
-        {"uri", "/backend.yaws"},
-        {"qop", "auth"},
-        {"algorithm", "MD5"},
-        {"nonce", float_to_list(random:uniform())},
-        {"opaque", float_to_list(random:uniform())}
-    ]}.
-
-digest_authenticate(_Challenge, Response) ->
-    {struct, [
-        _, {_, Realm}, {_, Uri}, {_, Qop}, _, {_, Nonce}, {_, Opaque}
-    ]} = _Challenge,
-    Username = json:obj_fetch(username, Response),
-    ResponseHash = json:obj_fetch(response, Response),
-    Nc = json:obj_fetch(nc, Response),
-    Cnonce = json:obj_fetch(cnonce, Response),
-    ResponseOpaque = json:obj_fetch(opaque, Response),
-
-    % TODO: don't hardcode user list
-    % TODO: store password hash instead of plaintext password 
-    UsersList = [
-        {"test_username_0", "test_password_0"},
-        {"test_username_1", "test_password_1"}
-    ],
-    UsersDict = dict:from_list(UsersList),
-
-    case dict:find(Username, UsersDict) of
-        error -> {error, unknown_user};
-        {ok, Password} ->
-            A1 = postlock_test_util:md5_string(string:join([Username, Realm, Password], ":")),
-            A2 = postlock_test_util:md5_string(string:join(["POST", Uri], ":")),
-            ExpectedResponseHash = postlock_test_util:md5_string(string:join([A1, Nonce, Nc, Cnonce, Qop, A2], ":")),
-
-            case ResponseOpaque == Opaque andalso ResponseHash == ExpectedResponseHash of
-                true -> {ok, Username};
-                false -> {error, bad_password}
-            end
-    end.
-
 

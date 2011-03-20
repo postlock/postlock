@@ -80,6 +80,9 @@
 -include("plError.hrl").
 
 -record(state, {
+          application_process,
+          % settings requested by the client (eg. through HTTP GET)
+          client_options,
           % The participant's data
           participant,
           % The PID of the process which owns the websocket, used to
@@ -101,7 +104,7 @@
 %% initialize. To ensure a synchronized start-up procedure, this function
 %% does not return until Module:init/1 has returned.  
 %%--------------------------------------------------------------------
-start_link(ServerData = [_SessionServer, _ParticipantId, _Connection]) ->
+start_link(ServerData = [_SessionServer, _ApplicationProcess, _ParticipantId, _Connection]) ->
     gen_fsm:start_link(?MODULE, ServerData, []).
 
 %%====================================================================
@@ -116,18 +119,21 @@ start_link(ServerData = [_SessionServer, _ParticipantId, _Connection]) ->
 %% gen_fsm:start_link/3,4, this function is called by the new process to 
 %% initialize. 
 %%--------------------------------------------------------------------
-init([SessionServer, ParticipantId, {websocket, ArgsHeaders}]) ->
+init([SessionServer, ApplicationProcess, ParticipantId, {websocket, Arg}]) ->
     % Don't die on 'EXIT' signal
     process_flag(trap_exit, true),
     % Initialize websocket
-    case connect_websocket(ParticipantId, ArgsHeaders) of
+    case connect_websocket(ParticipantId, Arg#arg.headers) of
         {ok, WebSocketOwner} ->
             {ok, idle, #state{
                    participant = #pl_participant{
-                    id = ParticipantId,
-                    process_id = self()},
+                      id = ParticipantId,
+                       process_id = self()},
                    websocket_owner = WebSocketOwner,
-                   session_server = SessionServer
+                   session_server = SessionServer,
+                   client_options = gen_server:call(ApplicationProcess,
+                       {sanitize_client_options, yaws_api:parse_query(Arg)}),
+                   application_process = ApplicationProcess
                    % TODO: handle timeout event
              }, ?DEFAULT_TIMEOUT}; 
         {error, Reason} ->
@@ -143,12 +149,16 @@ idle({client_message, Msg}, State) when Msg#pl_client_msg.type == "client_connec
     % send server_connect message
     State#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{type="server_connect"})},
     % send auth_challenge, which puts client in auth state.
-    {ok, AuthChallengeFun} = gen_server:call(State#state.session_server, {get_callback, auth_challenge}),
-    AuthChallenge = AuthChallengeFun(),
+    RequestedAuthType = case lists:keyfind("auth_type", 1, State#state.client_options) of
+        {"auth_type", Type} -> erlang:list_to_atom(Type);
+        false -> default
+    end,
+    {ChallengeFun, AuthFun} = plAuthlib:get_auth_impl(RequestedAuthType),
+    AuthChallenge = ChallengeFun(),
     State#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{
         type="auth_challenge",
         body=AuthChallenge})},
-    {next_state, auth, State#state{scratch=AuthChallenge}, ?DEFAULT_TIMEOUT};
+    {next_state, auth, State#state{scratch={AuthChallenge, AuthFun}}, ?DEFAULT_TIMEOUT};
 
 idle(Event, State) ->
     io:format("plGateway:idle/2 got unexpected event ~p~n", [Event]),
@@ -168,8 +178,9 @@ idle(Event, _From, State) ->
 
 auth({client_message, Msg}, State) when Msg#pl_client_msg.type == "auth_response" ->
     % Pass auth response to callback:
-    {ok, AuthenticateFun} = gen_server:call(State#state.session_server, {get_callback, authenticate}),
-    {Result, ClientResponse} = case AuthenticateFun(State#state.scratch, Msg#pl_client_msg.body) of
+    {AuthChallenge, AuthFun} = State#state.scratch,
+    {Result, ClientResponse} = case AuthFun(AuthChallenge, Msg#pl_client_msg.body, 
+        State#state.application_process) of
         {ok, Username} ->
             % update participant data in state
             UpdatedPData = (State#state.participant)#pl_participant{

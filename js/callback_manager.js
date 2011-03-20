@@ -34,13 +34,13 @@ if (POSTLOCK) POSTLOCK.set("modules.callback_manager", function (spec) {
                 else {
                     first_cb = function() {return my.default_callback(signal, invoke("util.args2array", arguments));};
                 }
-                result.internal = first_cb.apply(this, args_array) || {};
+                result.internal = first_cb.apply(instance, args_array) || {};
                 // the internal callback may change the signal for the user-defined callbacks
                 mapped_signal = result.internal.user_signal || signal;
                 // apply the user-defined cb if one exists
                 if (!result.internal.skip_user_cb && (mapped_signal in my.user_cb)) {
                     if (result.internal.user_cb_data) args_array.push(result.internal.user_cb_data);
-                    result.user = my.user_cb[mapped_signal].apply(this,args_array);
+                    result.user = my.user_cb[mapped_signal].apply(instance.exports, args_array);
                 }
                 return result;
         }

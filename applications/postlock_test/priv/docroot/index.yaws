@@ -1,0 +1,16 @@
+<erl>
+    generate_list_items(L) ->
+        ["<li><a href=\"" ++ X ++ "\">" ++ X ++ "</a></li>" || X <- L].
+    out(A) ->
+         {html, "
+            <html>
+            <head><title>postlock unit tests</title></head>
+            <body>
+            <h1>Available unit tests</h1>
+            <ul>" ++
+            generate_list_items(filelib:wildcard("*.html", A#arg.docroot ))
+            ++ "</ul>
+            </body>
+            </html>"}.
+</erl>
+

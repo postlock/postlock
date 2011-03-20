@@ -31,9 +31,9 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     });
 
     // ---- data belonging to postlock instance ----
-    instance.data.counters.object_id = invoke("modules.counter");
-    instance.data.counters.client_message_id = invoke("modules.counter");
-    instance.data.counters.last_server_msg_id = 0;
+    //instance.data.counters.object_id = invoke("modules.counter");
+    //instance.data.counters.client_message_id = invoke("modules.counter");
+    //instance.data.counters.last_server_msg_id = 0;
     //instance.data.objects.set(invoke("modules.meta_object", ({cb: instance.cb})));
 
     // ---- utility functions ----

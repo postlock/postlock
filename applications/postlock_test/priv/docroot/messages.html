@@ -1,0 +1,80 @@
+<html>
+<head><title>postlock unit tests</title>
+<link href="qunit.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="jquery-1.4.4.min.js"></script>
+<script type="text/javascript" src="qunit.js"></script>
+<script type="text/javascript" src="http://localhost:8081/MD5.js"></script>
+<script type="text/javascript" src="http://localhost:8081/core.js"></script>
+<script type="text/javascript" src="http://localhost:8081/util.js"></script>
+<script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
+<script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/instance.js"></script>
+<script type="text/javascript" src="testlib.js"></script>
+<script type="text/javascript">
+$(document).ready(function(){
+
+module("messages");
+
+    // client to client messages are tested by connected two clients to the session, then
+    // sending messages between them.
+    test("message delivery", function() {
+        var clients = connect_clients({
+            url: get_backend_url(),
+            users: [
+                {username: "test_username_0", password: "test_password_0"},
+                {username: "test_username_1", password: "test_password_1"}
+            ],
+            on_all_connected: function() {
+               var i = 0, recipient;
+               for (; i < clients.length; i++) {
+                   recipient = clients[get_peer_id(i)].postlock.participant_id();
+                   clients[i].postlock.send({
+                       to: recipient,
+                       type: 'msg',
+                       body: clients[i].sent});
+               }
+            }
+            }),
+            get_peer_id = function(myid) {return (myid + 1) % clients.length;},
+            test_messages = function() {
+                var i = 0, recipient_ix;
+                for (; i < clients.length; i++) {
+                    recipient_ix = get_peer_id(i);
+                    equal(clients[recipient_ix].received, clients[i].sent, "user "+i+"'s message was received by user "+recipient_ix);
+                }
+                start();
+            };
+        $(clients).each(function(ix) {
+        var client = this;
+        switch (ix) {
+            case 0: 
+                this.sent = "the first mesage";
+                break;
+            case 1: 
+                this.sent = "the reply";
+                break;
+        };
+        client.received = "";
+        client.postlock.set_cb(
+           'participant_message', function(msg) {
+               var i=0, result = true;
+               client.received = msg.body;
+               for (;i < clients.length;i++) result = result && clients[i].received.length > 0;
+               if (result) test_messages();
+           });
+       });
+       expect(clients.length);
+       stop();
+    });
+}); // ready()
+</script>
+</head>
+<body>
+<h1 id="qunit-header">Postlock unit tests</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>

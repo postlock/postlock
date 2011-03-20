@@ -1,7 +1,7 @@
 <erl>
 out(A) ->
     {_SessionId, SessionServer} = gen_server:call(postlock_test_server, {get_session}),
-    case gen_server:call(SessionServer, {connect_client, {websocket, A#arg.headers}}) of
+    case gen_server:call(SessionServer, {connect_client, {websocket, A}}) of
         {ok, WS} -> WS;
         {error, Reason} ->
             StrReason = lists:flatten(io_lib:format("~p", [Reason])),

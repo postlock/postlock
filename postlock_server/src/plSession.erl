@@ -32,8 +32,10 @@
     session_id,
     % maps participants to plGateway PIDs
     participants=gb_trees:empty(),
-    % callback process, used for eg: authentication
-    callback
+    % application process, used for eg: authentication
+    application_process,
+    % used when a new participant connects
+    next_participant_id = 2 % 0 and 1 are currently reserved.
 }).
 
 %%====================================================================
@@ -43,7 +45,7 @@
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-start_link(ServerData = [_SessionId, _CallbackProcess]) ->
+start_link(ServerData = [_SessionId, _ApplicationProcess]) ->
     gen_server:start_link(?MODULE, ServerData, []).
 
 %%====================================================================
@@ -57,12 +59,12 @@ start_link(ServerData = [_SessionId, _CallbackProcess]) ->
 %%                         {stop, Reason}
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
-init([SessionId, CallbackProcess]) ->
+init([SessionId, ApplicationProcess]) ->
     % Don't die on 'EXIT' signal
     process_flag(trap_exit, true),
     State0 = #state{
         session_id=SessionId,
-        callback=CallbackProcess},
+        application_process=ApplicationProcess},
     case add_system_participants(State0) of
     {ok, NewState} ->
         {ok, NewState};
@@ -83,26 +85,27 @@ init([SessionId, CallbackProcess]) ->
 
 %% Handle incoming connection requests from new pariticpants.
 handle_call({connect_client, Connection}, _From, State) ->
-    ParticipantId = gb_trees:size(State#state.participants),
+    ParticipantId = State#state.next_participant_id,
     {Reply, NewState} = case plGateway:start_link([
-        self(), ParticipantId, Connection]) of
+        self(), State#state.application_process, ParticipantId, Connection]) of
         {ok, Gateway} -> 
             NS = add_participant(State, #pl_participant{
                 % No username yet, that comes after authentication.
                 id = ParticipantId,
                 process_id = Gateway
             }),
+            % update next participant id
+            NS1 = NS#state{next_participant_id = ParticipantId + 1},
             WSOwner = gen_fsm:sync_send_event(Gateway, {get_websocket_owner}),
             {{ok, {websocket, WSOwner, passive}},
-              NS};
+              NS1};
         Err = {error, _Reason} ->
             {Err, State}
     end,
     {reply, Reply, NewState};
-%% Proxies requests to the callback server. 
-handle_call({get_callback, _CbName} = Req, _From, State) ->
-   Reply = gen_server:call(State#state.callback, Req),
-   {reply, Reply, State};
+%% Returns the application server. 
+handle_call({get_application_process}, _From, State) ->
+   {reply, State#state.application_process, State};
 
 %% Returns session id to caller.
 handle_call({get_session_id}, _From, #state{session_id=Sid}=State) ->
@@ -150,7 +153,7 @@ handle_cast({deliver_message, #pl_client_msg{to=To}=Msg},
     case To of 
         ?SESSION_SERVER_PARTICIPANT_ID ->
             io:format("Session server got message ~p~n", [Msg]);
-        OtherParticipant ->
+        _OtherParticipant ->
             % TODO: send error if deliver_message returns {error, _}
             deliver_message(Msg, Participants)
     end,

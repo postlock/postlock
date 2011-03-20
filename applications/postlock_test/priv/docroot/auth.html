@@ -5,19 +5,13 @@
 <script type="text/javascript" src="qunit.js"></script>
 <script type="text/javascript" src="http://localhost:8081/MD5.js"></script>
 <script type="text/javascript" src="http://localhost:8081/core.js"></script>
-<script type="text/javascript" src="http://localhost:8081/counter.js"></script>
 <script type="text/javascript" src="http://localhost:8081/util.js"></script>
 <script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
 <script type="text/javascript" src="http://localhost:8081/connection.js"></script>
 <script type="text/javascript" src="http://localhost:8081/instance.js"></script>
+<script type="text/javascript" src="testlib.js"></script>
 <script type="text/javascript">
-var path = document.location.href.slice(7).split("/");
-path = path.slice(0, path.length -1);
-var backend_url = "ws://" +  path.join("/") + "/backend.yaws";
-$(document).ready(function(){
-
-module("connection");
-
+var auth_tests = function(backend_url) {
     // If we give the postlock server the wrong password,
     // the server should drop the websocket connection.
     test("bad password", function() {
@@ -78,65 +72,13 @@ module("connection");
                     start();
             }).connect();
     });
-
-module("messages");
-
-    // client to client messages are tested by connected two clients to the session, then
-    // sending messages between them.
-    test("message delivery", function() {
-        var o, i, users = [
-            {postlock: null, sent: "the first mesage", connected:false, received: ""},
-            {postlock: null, sent: "the reply", connected: false, received:""},
-            ],
-            get_peer_id = function(myid) {return (myid + 1) % users.length;},
-            send_messages = function() {
-                var i = 0, recipient;
-                for (; i < users.length; i++) {
-                    recipient = users[get_peer_id(i)].postlock.participant_id();
-                    users[i].postlock.send({
-                        to: recipient,
-                        type: 'msg',
-                        body: users[i].sent});
-                }
-            },
-            test_messages = function() {
-                var i = 0, recipient_ix;
-                for (; i < users.length; i++) {
-                    recipient_ix = get_peer_id(i);
-                    equal(users[recipient_ix].received, users[i].sent, "user "+i+"'s message was received by user "+recipient_ix);
-                }
-                start();
-            };
-        for (i = 0; i < users.length; i++) {
-            (function(o) {
-                o.postlock = POSTLOCK.make_new({
-                    url: backend_url, 
-                    username: 'test_username_'+i, 
-                    password: 'test_password_'+i}).set_cb(
-                  'connected', function() {
-                      var i=0, result = true;
-                      o.connected = true;
-                      for (;i < users.length;i++) result = result && users[i].connected;
-                      if (result) send_messages();
-                  }).set_cb(
-                  'participant_message', function(msg) {
-                      var i=0, result = true;
-                      o.received = msg.body;
-                      for (;i < users.length;i++) result = result && users[i].received.length > 0;
-                      if (result) test_messages();
-                  }).connect(),
-
-                o.on_message = function(msg) {
-                    equal(msg, peer.sent, "user " + i + " got peer's message");};
-                o.on_connect = function() {
-                    
-                }
-            })(users[i]);
-        }
-        expect(users.length);
-        stop();
-    });
-}); // ready()
+};
+$(document).ready(function() {
+module("trivial authentication");
+auth_tests(get_backend_url());
+module("digest authentication");
+auth_tests(get_backend_url()+"?auth_type=digest");
+});
 </script>
 </head>
 <body>
@@ -148,3 +90,4 @@ module("messages");
 <div id="qunit-fixture">test markup, will be hidden</div>
 </body>
 </html>
+

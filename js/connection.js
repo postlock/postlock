@@ -118,7 +118,7 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                                         instance.data.config['participant_id'] = msg_obj.body.participant_id;
                                         instance.data.config['session_id'] = msg_obj.body.participant_id;
                                         // set prefix for oid's created by this participant.
-                                        instance.data.counters.object_id.set_prefix(msg_obj.body.participant_id + ".");
+                                        if (instance.data.counters.object_id) instance.data.counters.object_id.set_prefix(msg_obj.body.participant_id + ".");
                                         my.fun.connection_state_change(msg_obj, 'connected');
                                         my.cb.fire_async('connected');
                                         break;
