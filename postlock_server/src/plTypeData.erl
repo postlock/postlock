@@ -16,6 +16,6 @@ apply({set, Value}, {?MODULE, _}) ->
     {?MODULE, Value}.
 
 xform({_Op, Value1}, {set, _Value2}) when _Op == set; _Op == unsafe_set -> 
-    {{fail, {set, Value1}}, nop};
+    {fail, {set, Value1}, nop};
 xform({_Op, _Value1}, {unsafe_set, Value2}) when _Op == set; _Op == unsafe_set ->
-    {{ok, nop}, {set, Value2}}.
+    {ok, nop, {set, Value2}}.
