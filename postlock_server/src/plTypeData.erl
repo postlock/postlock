@@ -10,10 +10,10 @@
 -export([new/0, apply/2, xform/2]).
 
 new() ->
-    {?MODULE, undefined}.
+    undefined.
 
-apply({set, Value}, {?MODULE, _}) ->
-    {?MODULE, Value}.
+apply({set, Value}, _) ->
+    Value.
 
 xform({_Op, Value1}, {set, _Value2}) when _Op == set; _Op == unsafe_set -> 
     {fail, {set, Value1}, nop};
