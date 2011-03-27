@@ -1,19 +1,19 @@
 %%%-------------------------------------------------------------------
 %%% File    : plDataType.erl
 %%% Author  : Akos Toth-Mate <akos@tothmate.com>
-%%% Description : implementation of simple data type
+%%% Description : simple value store data type
 %%%
-%%% Created :  27 Mar 2011 by Peter Neumark <akos@tothmate.com>
+%%% Created :  27 Mar 2011 by Akos Toth-Mate <akos@tothmate.com>
 %%%-------------------------------------------------------------------
 
 -module(plTypeData).
--export([create/1, apply/2, xform/2]).
+-export([new/0, apply/2, xform/2]).
 
-create(Value) ->
+new() ->
+    {?MODULE, undefined}.
+
+apply({set, Value}, {?MODULE, _}) ->
     {?MODULE, Value}.
-
-apply({set, NewValue}, {?MODULE, _oldValue}) ->
-    {?MODULE, NewValue}.
 
 xform({_Op, Value1}, {set, _Value2}) when _Op == set; _Op == unsafe_set -> 
     {{fail, {set, Value1}}, nop};
