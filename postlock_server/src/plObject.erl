@@ -1,40 +1,25 @@
 %%%-------------------------------------------------------------------
 %%% File    : plObject.erl
-%%% Author  : Peter Neumark
-%%% Description : 
-%%% Functions for dealing with postlock objects.
+%%% Author  : Peter Neumark <neumark@postlock.org>
+%%% Description : A wrapper around the object type / state storage
+%%% implementations. Use the plObject functions to call the correct
+%%% code depending on the type of data.
 %%%
-%%% Created :  17 Jan 2011 by Peter Neumark
+%%% Created :  27 Mar 2011 by Peter Neumark <neumark@postlock.org>
 %%%-------------------------------------------------------------------
 -module(plObject).
--export([
-    get_oid/1, 
-    get_children/2,
-    make_create_transformation/1]).
--include("plState.hrl").
-
-get_oid(Obj) ->
-    Obj#postlock_object.oid.
-
-% Get children behaves differently based on the type of the object
-get_children(#postlock_object{content=#postlock_content_data{}}, _StateServer)->
-    [];
-
-get_children(#postlock_object{content=#postlock_content_dict{children=Dict}}, StateServer) ->
-    [gen_server:call(StateServer, {get_object, Oid}) || Oid <- gb_trees:values(Dict)].
-
-make_spec(#postlock_content_dict{children=Dict}, Spec) ->
-    Children = gb_trees:to_list(Dict),
-    json:obj_store("type", "dict",
-        json:obj_store("children", {struct, Children}, Spec)).
-
-make_create_transformation(#postlock_object{
-    oid=Oid,
-    content=Content}) ->
-    #postlock_transformation{
-        oid="meta_object",
-        cmd="create",
-        parameters= {struct, [
-            {"spec", make_spec(Content,{struct, [{"oid", Oid}]})}
-        ]}
-    }.
+-compile(export_all).
+%%%-------------------------------------------------------------------
+%%% Functions for dealing with object types.
+%%%-------------------------------------------------------------------
+new_obj(Mod) -> {Mod, apply(Mod, new_obj, [])}.
+get_oid({Mod, Obj}) -> {Mod, apply(Mod, get_oid, [Obj])}.
+execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
+%%%-------------------------------------------------------------------
+%%% Functions for dealing with storage implementations.
+%%%-------------------------------------------------------------------
+new_state(Mod) -> {Mod, apply(Mod, new_state, [])}.
+delete({Mod, State}, Oid) -> {Mod, apply(Mod, delete, [Oid, State])}.
+set({Mod, State}, Obj) -> {Mod, apply(Mod, save, [Obj, State])}.
+get({Mod, State}, Oid) -> {Mod, apply(Mod, get, [Oid, State])}.
+is_set({Mod, State}, Oid) -> {Mod, apply(Mod, is_set, [Oid, State])}.
