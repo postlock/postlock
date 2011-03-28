@@ -10,7 +10,7 @@
 -export([new/0, apply/2, xform/2]).
 
 new() ->
-    {?MODULE, []}.
+    [].
 
 apply({insert, Position, Value}, List) ->
     {List0, List1} = lists:split(Position, List), 
