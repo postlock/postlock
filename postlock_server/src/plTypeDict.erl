@@ -10,12 +10,12 @@
 -export([new/0, apply/2, xform/2]).
 
 new() ->
-    {?MODULE, dict:new()}.
+    dict:new().
 
-apply({set, Key, Value}, {?MODULE, Dict}) ->
-    {?MODULE, dict:store(Key, Value, Dict)};
-apply({remove, Key, Value}, {?MODULE, Dict}) ->
-    {?MODULE, dict:erase(Key, Value, Dict)}.
+apply({set, Key, Value}, Dict) ->
+    dict:store(Key, Value, Dict);
+apply({remove, Key, Value}, Dict) ->
+    dict:erase(Key, Value, Dict).
 
 xform({_Op, Key, Value1}, {set, Key, _Value2}) when _Op == set; _Op == unsafe_set ->
     {fail, {set, Key, Value1}, nop};

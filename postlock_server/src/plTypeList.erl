@@ -12,12 +12,12 @@
 new() ->
     {?MODULE, []}.
 
-apply({insert, Position, Value}, {?MODULE, List}) ->
+apply({insert, Position, Value}, List) ->
     {List0, List1} = lists:split(Position, List), 
-    {?MODULE, List0 ++ [Value] ++ List1};
-apply({remove, Position}, {?MODULE, List}) ->
+    List0 ++ [Value] ++ List1;
+apply({remove, Position}, List) ->
     {List0, List1} = lists:split(Position, List),
-    {?MODULE, List0 ++ lists:nthtail(1, List1)}.
+    List0 ++ lists:nthtail(1, List1).
 
 xform({insert, Position1, Value1}, {insert, Position2, Value2}) when Position1 =< Position2 ->
     {ok, {insert, Position1, Value1}, {insert, Position2 + 1, Value2}};
