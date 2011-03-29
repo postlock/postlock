@@ -39,8 +39,11 @@ module("transactions");
                     {username: "test_username_1", password: "test_password_1"}
                 ],
                 on_all_connected: function() {
-                    clients[0].postlock.send(
-                        mk_transaction(clients[0].postlock.participant_id()));
+                    clients[0].postlock.send({
+                        to: 1, // currently hardcoded participant id for state server
+                        type: 'transaction',
+                        body: mk_transaction(clients[0].postlock.participant_id())
+                    });
                 },
                 on_failure: function() {
                     console.log("connection failure");
@@ -63,6 +66,7 @@ module("transactions");
             client.received = null;
             client.postlock.set_cb(
                'participant_message', function(msg) {
+                   console.log("asdf");
                    var i=0, result = true;
                    client.received = msg;
                    for (;i < clients.length;i++) result = result && clients[i].received !== null;
