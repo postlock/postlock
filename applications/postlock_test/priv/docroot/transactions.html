@@ -1,0 +1,86 @@
+<html>
+<head><title>postlock unit tests</title>
+<link href="qunit.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="jquery-1.4.4.min.js"></script>
+<script type="text/javascript" src="qunit.js"></script>
+<script type="text/javascript" src="http://localhost:8081/core.js"></script>
+<script type="text/javascript" src="http://localhost:8081/util.js"></script>
+<script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
+<script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/instance.js"></script>
+<script type="text/javascript" src="testlib.js"></script>
+<script type="text/javascript">
+$(document).ready(function(){
+
+module("transactions");
+
+    // Two clients connect to the session. One issues a transaction.
+    // We test what both of them receive from the server
+    // as a result.
+    test("message delivery", function() {
+        var mk_transaction = function(participant_id) {
+                return {
+                    base_state: 0,
+                    ops: [
+                        {
+                            cmd: 'create',
+                            params: [{
+                                type: 'dict',
+                                oid: participant_id
+                            }]
+                        }
+                    ]
+                }
+            },
+            clients = connect_clients({
+                url: get_backend_url(),
+                users: [
+                    {username: "test_username_0", password: "test_password_0"},
+                    {username: "test_username_1", password: "test_password_1"}
+                ],
+                on_all_connected: function() {
+                    clients[0].postlock.send(
+                        mk_transaction(clients[0].postlock.participant_id()));
+                },
+                on_failure: function() {
+                    console.log("connection failure");
+                    start();
+                }
+            }),
+            test_messages = function() {
+                // clients 0 and 1 should get the same thing from the server:
+                var sent_transaction = clients[0].postlock.participant_id();
+                // set 'in_response_to' field.
+                sent_transaction['in_response_to'] = "0.0";
+                deepEqual(clients[0].received, sent_transaction, 
+                    "Client 0 got expected message from server");
+                deepEqual(clients[1].received, sent_transaction, 
+                    "Client 1 got expected message from server");
+                start();
+            };
+        $(clients).each(function(ix) {
+            var client = this;
+            client.received = null;
+            client.postlock.set_cb(
+               'participant_message', function(msg) {
+                   var i=0, result = true;
+                   client.received = msg;
+                   for (;i < clients.length;i++) result = result && clients[i].received !== null;
+                   if (result) test_messages();
+               });
+       });
+       expect(clients.length);
+       stop();
+    });
+}); // ready()
+</script>
+</head>
+<body>
+<h1 id="qunit-header">Postlock unit tests</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>
