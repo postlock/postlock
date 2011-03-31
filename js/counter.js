@@ -18,17 +18,11 @@ if (POSTLOCK) POSTLOCK.set("modules.counter",
             set_seq: function (s) {
                 seq = s;
             },
-            gensym: function (  ) {
+            get_id: function (  ) {
                 var result = prefix + seq;
                 seq += 1;
                 return result;
-            },
-            // Note: disregards prefix.
-            getint: function () {
-                var result = seq + 0;
-                seq += 1;
-                return result;
-            }
+            } 
         };
     });
 })();

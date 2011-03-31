@@ -5,8 +5,8 @@
 *
 **/
 
-
-var MD5 = function (string) {
+(function() {
+if (POSTLOCK) POSTLOCK.set("util.crypto.MD5", function (string) {
 	function RotateLeft(lValue, iShiftBits) {
 		return (lValue<<iShiftBits) | (lValue>>>(32-iShiftBits));
 	}
@@ -204,4 +204,5 @@ var MD5 = function (string) {
 	var temp = WordToHex(a)+WordToHex(b)+WordToHex(c)+WordToHex(d);
  
 	return temp.toLowerCase();
-}
+}); 
+})();
