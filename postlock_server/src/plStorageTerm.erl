@@ -24,7 +24,7 @@
 ]).
 
 %% These records are used internally by this module.
-record(obj, { % Obj contains all data associated with one object.
+-record(obj, { % Obj contains all data associated with one object.
     action = none,   % what happened to object: 
                      % create | delete | modify | none
     object           % the object itself
@@ -47,7 +47,7 @@ set(Obj, State, Action) ->
 
 get(Oid, State) ->
     %% Returns undefined if Oid is not in state.
-    case is_set(Oid, State) ->
+    case is_set(Oid, State) of
         false -> undefined;
         true -> 
             Obj = gb_trees:get(Oid, State),
@@ -59,9 +59,9 @@ delete(Oid, State) ->
     %% gb_tree, just sets the action to delete
     case gb_trees:is_defined(Oid, State) of
         false -> 
-            gb_trees:insert(Oid, #obj{action=delete}, State};
+            gb_trees:insert(Oid, #obj{action=delete}, State);
         true ->  
-            gb_trees:update(Oid, #obj{action=delete}, State};
+            gb_trees:update(Oid, #obj{action=delete}, State)
     end.
 
 is_set(Oid, State) ->

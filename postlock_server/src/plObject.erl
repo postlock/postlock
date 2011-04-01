@@ -25,4 +25,4 @@ update(Obj, {Mod, State}) -> {Mod, apply(Mod, update, [Obj, State])}.
 get(Oid, {Mod, State}) -> {Mod, apply(Mod, get, [Oid, State])}.
 is_set(Oid, {Mod, State}) -> {Mod, apply(Mod, is_set, [Oid, State])}.
 % only needed by ETS so far
-destroy({Mod, State}) -> apply(Mod, destroy, []).
+destroy({Mod, State}) -> apply(Mod, destroy, [State]).

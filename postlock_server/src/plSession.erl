@@ -92,7 +92,8 @@ handle_call({connect_client, Connection}, _From, State) ->
             NS = add_participant(State, #pl_participant{
                 % No username yet, that comes after authentication.
                 id = ParticipantId,
-                process_id = Gateway
+                process_id = Gateway,
+                status = connected
             }),
             % update next participant id
             NS1 = NS#state{next_participant_id = ParticipantId + 1},
@@ -136,15 +137,22 @@ handle_cast({update_participant_data, #pl_participant{id=Id} = ParticipantData},
 %% Called when a client disconnects.
 handle_cast(
     {disconnect, 
-        {#pl_participant{id=Id} = ParticipantData,
+        {ParticipantId,
          Reason,
          Details}}, 
-    #state{participants = P} = State) ->
-    % TODO: check that participant is in list of participants
-    error_logger:info_report(["disconnecting participant from session", 
-        ParticipantData, Reason, Details]),
-    NewState = State#state{participants = 
-                    gb_trees:delete(Id,P)}, 
+    #state{participants = Participants} = State) ->
+    NewState = case gb_trees:lookup(ParticipantId, Participants) of
+        % update participant status to 'disconnecting'
+        {value, Participant}->
+            State#state{participants = gb_trees:update(ParticipantId,
+                Participant#pl_participant{
+                    status = disconnecting,
+                    participant_data = {Reason, Details}
+                }, Participants)};
+        none ->
+            error_logger:error_report(["disconnect message received from nonexisting participant"]), 
+            State
+    end,
     {noreply, NewState};
 
 %% Delivers messages between participants
@@ -171,15 +179,8 @@ handle_cast(Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
-handle_info({'EXIT', _Pid, {#pl_participant{id=ParticipantId}, Reason}}, 
-    #state{participants=Participants}=State) ->
-    io:format("Participant #~p disconnected. Reason: ~p~n",[ParticipantId, Reason]),
-    {noreply, State#state{participants=gb_trees:delete(ParticipantId, Participants)}};
-
 handle_info({'EXIT', Pid, Reason}, State) ->
-    % TODO: handle state server crashes.
-    io:format("Linked process with PID ~p died! Reason: ~p~n",[Pid, Reason]),
-    {noreply, State};
+    {noreply, on_exit(Pid, Reason, State)};
 
 handle_info(Info, State) ->
     error_logger:warning_report(["plSession:handle_info/2: unhandled message",
@@ -228,7 +229,8 @@ add_system_participants(#state{session_id=SessionId}=State) ->
                     add_participant(S, #pl_participant{
                         id=ParticipantId,
                         username=?SYSTEM_USER,
-                        process_id=ParticipantPid
+                        process_id=ParticipantPid,
+                        status=authenticated
                     })
                 end,
                 State,
@@ -250,4 +252,46 @@ deliver_message(#pl_client_msg{to=To}=Msg, Participants) ->
            Pid ! {participant_message, Msg};
        false ->
            {error, {no_such_participant, To}}
+    end.
+
+on_exit(Pid, Reason, State) ->
+    NewState = case pid_to_participant(Pid, State#state.participants) of
+        none ->
+            error_logger:error_report(
+                ["Linked process died which was not a participant. Pid: ", Pid]),
+            State;
+        Participant ->
+            on_participant_disconnect(Participant, Reason),
+            State#state{participants =
+                gb_trees:delete(
+                    Participant#pl_participant.id,
+                    State#state.participants)}
+    end,
+    NewState.
+
+pid_to_participant(Pid, Participants) ->
+    pid_to_participant_1(Pid, 
+        gb_trees:next(
+            gb_trees:iterator(Participants))).
+
+pid_to_participant_1(_Pid, none) ->
+    none;
+pid_to_participant_1(Pid, {_Key, Val, Iter}=T) ->
+    case Val#pl_participant.process_id == Pid of
+        true ->  Val;
+        false -> pid_to_participant_1(Pid, gb_trees:next(Iter))
+    end.
+
+on_participant_disconnect(Participant, Reason) ->
+    case {Participant#pl_participant.status, Reason} of
+        {disconnecting, normal} -> 
+            error_logger:info_report(["plGateway process exited gracefully",
+            [{pid, Participant#pl_participant.process_id},
+             {participant_id, Participant#pl_participant.id},
+             {exit_reason, Participant#pl_participant.participant_data}]]);
+        {Status, Reason} ->
+            error_logger:info_report(["plGateway process crashed",
+                [{participant, Participant},
+                 {reason, Reason},
+                 {status, Status}]])
     end.
