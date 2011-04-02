@@ -23,10 +23,13 @@
 -include("plRegistry.hrl").
 % Needed for mnesia records used by plState.
 -include("plState.hrl").
+% Required for #pl_client_msg
+-include("plMessage.hrl").
 
 -record(state, {
     session_server,
-    sessionid
+    sessionid,
+    transaction_runner
 }).
 
 %%====================================================================
@@ -54,9 +57,11 @@ init([SessionServer, SessionId]) ->
     process_flag(trap_exit, true),
     make_session_tables(SessionId), 
     create_root_node(SessionId),
+    TransactionRunner = spawn_link(plTransactionRunner, init, [self()]),
     {ok, #state{
         session_server = SessionServer,
-        sessionid = SessionId
+        sessionid = SessionId,
+        transaction_runner = TransactionRunner
     }}.
 
 %%--------------------------------------------------------------------
@@ -98,6 +103,12 @@ handle_cast(Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
+handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
+    case Msg#pl_client_msg.type of
+        "transaction" ->
+            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
+    end,
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 

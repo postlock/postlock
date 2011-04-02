@@ -27,7 +27,7 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                             msg: msg }]);
                     } else {
                         // add 'id' field to message
-                        msg['id'] = instance.data.counters.message_id.get_id(); 
+                        //msg['id'] = instance.data.counters.message_id.get_id(); 
                         return my.fun.websocket_safe_send(msg);
                     }
                 },
