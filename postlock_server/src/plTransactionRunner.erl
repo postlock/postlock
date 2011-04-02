@@ -23,6 +23,6 @@ listen_loop(StateServerPid) ->
             {bad_message, BadValue}
     end.
 
-process_transaction(T, StateServerPid) ->
+process_transaction(_T, _StateServerPid) ->
     % STUB
     ok.

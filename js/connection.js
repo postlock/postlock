@@ -26,6 +26,8 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                             state: my.state,
                             msg: msg }]);
                     } else {
+                        // add 'id' field to message
+                        msg['id'] = instance.data.counters.message_id.get_id(); 
                         return my.fun.websocket_safe_send(msg);
                     }
                 },
@@ -67,10 +69,8 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                         var nonce = msg_obj.body.nonce || throw_ex("no nonce provided", {msg_body: msg_obj.bodyj});
                         var opaque = msg_obj.body.opaque || throw_ex("no opaque provided", {msg_body: msg_obj.bodyj});
                         var algorithm = msg_obj.body.algorithm || throw_ex("no algorithm provided", {msg_body: msg_obj.bodyj});
-                        if (typeof(window[algorithm]) === "function") {
-                            // TODO: get rid of window, don't use the global namesapce.
-                            algorithm = window[algorithm];
-                        } else {
+                        var alg_impl = POSTLOCK.get('util.crypto.'+algorithm);
+                        if (typeof(alg_impl) !== "function") {
                             throw_ex("algorithm not implemented", {algorithm: algorithmj});
                         }
                         var qop = msg_obj.body.qop || throw_ex("no qop provided", {msg_body: msg_obj.bodyj});
@@ -78,11 +78,11 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                             throw_ex("qop not supported", {qop: qop});
                         }
 
-                        var HA1 = algorithm([spec.username, realm, spec.password].join(":"));
-                        var HA2 = algorithm(["POST", uri].join(":"));
+                        var HA1 = alg_impl([spec.username, realm, spec.password].join(":"));
+                        var HA2 = alg_impl(["POST", uri].join(":"));
                         var nc = "00000001";
                         var cnonce =  Math.random().toString();
-                        var response = algorithm([HA1, nonce, nc, cnonce, qop, HA2].join(":"));
+                        var response = alg_impl([HA1, nonce, nc, cnonce, qop, HA2].join(":"));
 
                         return {
                             username: spec.username,

@@ -80,6 +80,8 @@
 -include("plError.hrl").
 
 -record(state, {
+          % 'id' field of next client message
+          next_message_id = 0,
           application_process,
           % settings requested by the client (eg. through HTTP GET)
           client_options,
@@ -184,7 +186,9 @@ auth({client_message, Msg}, State) when Msg#pl_client_msg.type == "auth_response
         {ok, Username} ->
             % update participant data in state
             UpdatedPData = (State#state.participant)#pl_participant{
-                username = Username},
+                username = Username,
+                status = authenticated
+                },
             NewState = State#state{participant = UpdatedPData},
             % update user data in session server
             gen_server:cast(State#state.session_server, 
@@ -319,7 +323,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%--------------------------------------------------------------------
 on_disconnect(State, Reason, Details) ->
     gen_server:cast(State#state.session_server, 
-        {disconnect, {State#state.participant, Reason, Details}}).
+        {disconnect, {(State#state.participant)#pl_participant.id, Reason, Details}}).
 
 finalize_client_msg(#pl_client_msg{} = Msg) ->
     plMessage:finalize(?RECORD2JSON(pl_client_msg, Msg)).

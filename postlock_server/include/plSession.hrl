@@ -13,7 +13,9 @@
     id,                % participant id
     username = unknown,% defined after authentication
     process_id,        % erlang PID
-    joined = now()
+    joined = now(),    %
+    status,
+    participant_data
 }).
 
 

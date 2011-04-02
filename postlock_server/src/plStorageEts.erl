@@ -6,7 +6,7 @@
 %%%
 %%% Created :  27 Mar 2011 by Peter Neumark <neumark@postlock.org>
 %%%-------------------------------------------------------------------
--module(plStorageTerm).
+-module(plStorageEts).
 -export([
     % standard storage implementation functions
     delete/2,
@@ -32,15 +32,15 @@ update(Obj, State) -> write(Obj, State).
 write(Obj, State) -> ets:insert(State, #ets_obj{
     obj=Obj,
     oid=plObject:get_oid(Obj)}).
-
-get(Oid, State) ->
+% STUBS
+get(_Oid, _State) ->
     %TODO
     ok.
 
-delete(Oid, State) ->
+delete(_Oid, _State) ->
     %TODO
     ok.
 
-is_set(Oid, State) ->
+is_set(_Oid, _State) ->
     %TODO
     ok.

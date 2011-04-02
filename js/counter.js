@@ -8,27 +8,16 @@ if (POSTLOCK) POSTLOCK.set("modules.counter",
         // methods for setting the prefix and sequence
         // number, and a gensym method that produces unique
         // strings.
-        var prefix = '';
         var seq = initial_val || 0;
         return {
-            get_prefix: function () {return prefix + '';},
-            set_prefix: function (p) {
-                prefix = String(p);
+            set_value: function (s) {
+                seq = s+0;
             },
-            set_seq: function (s) {
-                seq = s;
-            },
-            gensym: function (  ) {
-                var result = prefix + seq;
-                seq += 1;
-                return result;
-            },
-            // Note: disregards prefix.
-            getint: function () {
+            get_value: function () {
                 var result = seq + 0;
                 seq += 1;
                 return result;
-            }
+            } 
         };
     });
 })();
