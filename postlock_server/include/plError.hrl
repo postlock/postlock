@@ -17,13 +17,12 @@
 %%% ----------------------------------------------------------
 %%% 1XX ERRORS: issued by plGateway
 %%% ----------------------------------------------------------
--define(PL_ERR_BAD_SYNC_STATE_FOR_CLIENT_MESSAGE, 
-    {100, "Unexpcted message: Not yet in connected state!"}).
--define(PL_ERR_ERROR_PARSING_TRANSACTION,
-    {102, "Error parsing transaction"}).
+-define(PL_ERR_UNEXPECTED_MESSAGE_ID,
+    {101, "Received message had incorrect message id."}).
+-define(PL_ERR_MALFORMED_MESSAGE,
+    {102, "Error parsing message."}).
 -define(PL_ERR_AUTH_FAILURE,
-    {103, "Authentication failed"}).
-
+    {103, "Authentication failed."}).
 
 -endif. %PL_ERROR_HRL
 

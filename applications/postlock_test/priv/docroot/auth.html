@@ -17,7 +17,7 @@ var auth_tests = function(backend_url) {
     // the server should drop the websocket connection.
     test("bad password", function() {
       var cb_invocation = 0;
-      expect(2);
+      expect(4);
       stop();
       POSTLOCK.make_new({
         url: backend_url, 
@@ -27,16 +27,17 @@ var auth_tests = function(backend_url) {
                 cb_invocation++;
                 if (cb_invocation === 1) ok(oldstate === 'idle' && newstate === 'auth', 'idle->auth');
                 if (cb_invocation === 2) ok(oldstate === 'auth' &&  newstate === 'idle', 'auth->idle');
-            }).set_cb('ws_onclose', function() {
-                start();
-            }).connect();
+            }).set_cb('error', function(error_type, msg) {
+                equal(error_type, 'remote_error', "Authentication failure is a remote error.");
+                equal(msg.body.code, 103, "Authentication failure is error #103 (see plError.hrl).");
+            }).set_cb('connection_closed', function() { start();}).connect();
     });
 
     // If we give the postlock server a non-existing username,
     // the server should drop the websocket connection.
     test("unknown user", function() {
       var cb_invocation = 0;
-      expect(2);
+      expect(4);
       stop();
       POSTLOCK.make_new({
         url: backend_url, 
@@ -46,9 +47,10 @@ var auth_tests = function(backend_url) {
                 cb_invocation++;
                 if (cb_invocation === 1) ok(oldstate === 'idle' && newstate === 'auth', 'idle->auth');
                 if (cb_invocation === 2) ok(oldstate === 'auth' &&  newstate === 'idle', 'auth->idle');
-            }).set_cb('ws_onclose', function() {
-                start();
-            }).connect();
+            }).set_cb('error', function(error_type, msg) {
+                equal(error_type, 'remote_error', "Authentication failure is a remote error.");
+                equal(msg.body.code, 103, "Authentication failure is error #103 (see plError.hrl).");
+            }).set_cb('connection_closed', function() { start();}).connect();
     });
 
     // For a successful connection, we should end up in the 'connected' state

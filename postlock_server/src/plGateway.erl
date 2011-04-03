@@ -74,8 +74,6 @@
 -include("yaws_api.hrl").
 % Required for #pl_client_msg
 -include("plMessage.hrl").
-% Required for #pl_participant
--include("plSession.hrl").
 % Required for error codes
 -include("plError.hrl").
 
@@ -86,7 +84,8 @@
           % settings requested by the client (eg. through HTTP GET)
           client_options,
           % The participant's data
-          participant,
+          participant_id,
+          username,
           % The PID of the process which owns the websocket, used to
           % push data to the client.
           websocket_owner,
@@ -128,9 +127,7 @@ init([SessionServer, ApplicationProcess, ParticipantId, {websocket, Arg}]) ->
     case connect_websocket(ParticipantId, Arg#arg.headers) of
         {ok, WebSocketOwner} ->
             {ok, idle, #state{
-                   participant = #pl_participant{
-                      id = ParticipantId,
-                       process_id = self()},
+                   participant_id = ParticipantId,
                    websocket_owner = WebSocketOwner,
                    session_server = SessionServer,
                    client_options = gen_server:call(ApplicationProcess,
@@ -146,21 +143,27 @@ init([SessionServer, ApplicationProcess, ParticipantId, {websocket, Arg}]) ->
 %% state: idle 
 %%--------------------------------------------------------------------
 idle({client_message, Msg}, State) when Msg#pl_client_msg.type == "client_connect" ->
-    % put websocket in active mode
-    State#state.websocket_owner ! {set_active_mode},
-    % send server_connect message
-    State#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{type="server_connect"})},
-    % send auth_challenge, which puts client in auth state.
-    RequestedAuthType = case lists:keyfind("auth_type", 1, State#state.client_options) of
-        {"auth_type", Type} -> erlang:list_to_atom(Type);
-        false -> default
-    end,
-    {ChallengeFun, AuthFun} = plAuthlib:get_auth_impl(RequestedAuthType),
-    AuthChallenge = ChallengeFun(),
-    State#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{
-        type="auth_challenge",
-        body=AuthChallenge})},
-    {next_state, auth, State#state{scratch={AuthChallenge, AuthFun}}, ?DEFAULT_TIMEOUT};
+    try 
+        NewState = process_message_id(State, Msg),
+        % put websocket in active mode
+        NewState#state.websocket_owner ! {set_active_mode},
+        % send server_connect message
+        NewState#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{type="server_connect"})},
+        % send auth_challenge, which puts client in auth state.
+        RequestedAuthType = case lists:keyfind("auth_type", 1, NewState#state.client_options) of
+            {"auth_type", Type} -> erlang:list_to_atom(Type);
+            false -> default
+        end,
+        {ChallengeFun, AuthFun} = plAuthlib:get_auth_impl(RequestedAuthType),
+        AuthChallenge = ChallengeFun(),
+        NewState#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{
+            type="auth_challenge",
+            body=AuthChallenge})},
+        {next_state, auth, NewState#state{scratch={AuthChallenge, AuthFun}}, ?DEFAULT_TIMEOUT}
+    catch throw:{unexpected_message_id, ExData} ->
+        on_disconnect(State, unexpected_message_id, ExData),
+        {stop, normal, State}
+    end;
 
 idle(Event, State) ->
     io:format("plGateway:idle/2 got unexpected event ~p~n", [Event]),
@@ -179,40 +182,33 @@ idle(Event, _From, State) ->
 %%--------------------------------------------------------------------
 
 auth({client_message, Msg}, State) when Msg#pl_client_msg.type == "auth_response" ->
-    % Pass auth response to callback:
-    {AuthChallenge, AuthFun} = State#state.scratch,
-    {Result, ClientResponse} = case AuthFun(AuthChallenge, Msg#pl_client_msg.body, 
-        State#state.application_process) of
-        {ok, Username} ->
-            % update participant data in state
-            UpdatedPData = (State#state.participant)#pl_participant{
-                username = Username,
-                status = authenticated
-                },
-            NewState = State#state{participant = UpdatedPData},
-            % update user data in session server
-            gen_server:cast(State#state.session_server, 
-                {update_participant_data, UpdatedPData}),
-           {{next_state, connected, NewState},
-            {struct, [
-                    {"result", "success"},
-                    {"participant_id", (State#state.participant)#pl_participant.id},
-                    {"session_id", gen_server:call(State#state.session_server, {get_session_id})}
-            ]}};
-        {error, Reason} ->
-            % Inform session server that we are stopping
-            on_disconnect(State, auth_failure, Reason),
-            {{stop, normal, State},
-             {struct, [
-                    {"result", "failure"},
-                    {"error", ?ERROR2JSON(?PL_ERR_AUTH_FAILURE)}
-             ]}}
-    end,
-    % send auth_response to client
-    State#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{
-                    type="auth_result",
-                    body=ClientResponse})},
-    Result;
+    try 
+        NewState = process_message_id(State, Msg),
+        % Pass auth response to callback:
+        {AuthChallenge, AuthFun} = NewState#state.scratch,
+        case AuthFun(AuthChallenge, Msg#pl_client_msg.body, 
+            NewState#state.application_process) of
+            {ok, Username} ->
+                % update participant data in state
+                NewState2 = NewState#state{username = Username},
+                % update user data in session server
+                gen_server:cast(NewState2#state.session_server, 
+                    {update_participant_data, [{id, NewState2#state.participant_id},{username, Username}]}),
+                NewState2#state.websocket_owner ! {send, finalize_client_msg(#pl_client_msg{
+                    type = "auth_success",
+                    body = {struct, [
+                        {"participant_id", State#state.participant_id},
+                        {"session_id", gen_server:call(NewState2#state.session_server, {get_session_id})}]}})},
+                {next_state, connected, NewState2};
+            {error, Reason} ->
+                % Inform session server that we are stopping
+                on_disconnect(State, auth_failure, Reason),
+                {stop, normal, State} 
+        end
+    catch throw:{unexpected_message_id, ExData} ->
+        on_disconnect(State, unexpected_message_id, ExData),
+        {stop, normal, State}
+    end;
 
 auth(Event, State) ->
     io:format("plGateway:auth/2 got unexpected event ~p~n", [Event]),
@@ -226,8 +222,14 @@ auth(Event, _From, State) ->
 %% state: connected
 %%--------------------------------------------------------------------
 connected({client_message, #pl_client_msg{} = Msg}, State) ->
-    gen_server:cast(State#state.session_server, {deliver_message, Msg}),
-    {next_state, connected, State};
+    try 
+        NewState = process_message_id(State, Msg),
+        gen_server:cast(NewState#state.session_server, {deliver_message, Msg}),
+        {next_state, connected, NewState}
+    catch throw:{unexpected_message_id, ExData} ->
+        on_disconnect(State, unexpected_message_id, ExData),
+        {stop, normal, State}
+    end;
 
 connected(Event, State) ->
     io:format("plGateway:connected/2 got unexpected event ~p~n", [Event]),
@@ -248,7 +250,12 @@ connected(Event, _From, State) ->
 %% gen_fsm:send_all_state_event/2, this function is called to handle
 %% the event.
 %%--------------------------------------------------------------------
-handle_event(_Event, StateName, State) ->
+handle_event({bad_message, BadMsgData}, _StateName, State) ->
+    on_disconnect(State, bad_message, BadMsgData),
+    {stop, normal, State};
+
+handle_event(Event, StateName, State) ->
+    io:format("plGateway:handle_event/3 got unexpected event ~p~n", [Event]),
     {next_state, StateName, State}.
 
 %%--------------------------------------------------------------------
@@ -321,9 +328,31 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
+map_error(unexpected_message_id, _) -> ?PL_ERR_UNEXPECTED_MESSAGE_ID;
+map_error(auth_failure, _) -> ?PL_ERR_AUTH_FAILURE;
+map_error(bad_message, _) -> ?PL_ERR_MALFORMED_MESSAGE;
+map_error(_ErrorType, _Details) -> false.
+
+process_message_id(OldState, #pl_client_msg{id=MsgId}) ->
+    ExpectedId = OldState#state.next_message_id, 
+    case ExpectedId == MsgId of
+        true -> OldState#state{next_message_id = ExpectedId + 1};
+        false -> throw({unexpected_message_id, [{expected, ExpectedId}, {received, MsgId}]})
+    end.
+
 on_disconnect(State, Reason, Details) ->
+    % Notify session server about pending disconnection.
     gen_server:cast(State#state.session_server, 
-        {disconnect, {(State#state.participant)#pl_participant.id, Reason, Details}}).
+        {disconnect, {State#state.participant_id, Reason, Details}}),
+    case map_error(Reason, Details) of
+        false -> noop;% not an error, so the client gets no error message
+        Error -> 
+            Json = ?ERROR2JSON(Error),
+            State#state.websocket_owner ! {send, finalize_client_msg(
+                #pl_client_msg{
+                    type = "error",
+                    body = Json})}
+    end.
 
 finalize_client_msg(#pl_client_msg{} = Msg) ->
     plMessage:finalize(?RECORD2JSON(pl_client_msg, Msg)).
@@ -356,26 +385,27 @@ read_client_message(Gateway, ParticipantId, RawMsg) when is_binary(RawMsg) ->
 read_client_message(Gateway, ParticipantId, RawMsg) ->
     try
         {ok, Json} = json:decode_string(RawMsg),
-        {ok, Type} = plMessage:json_get_value([type],Json),
+        {ok, Type} = plMessage:json_get_value([type], Json),
         % Participant 0 is always the session server
         % and the default recipient of messages
-        {_, To} = plMessage:json_get_value([to],Json, 0),
-        {_, Body} = plMessage:json_get_value([body],Json, undefined),
+        {_, To} = plMessage:json_get_value([to], Json, 0),
+        {_, Body} = plMessage:json_get_value([body], Json, undefined),
+        {ok, Id} = plMessage:json_get_value([id], Json),
         % To use seq_tracer, uncomment the following line:
         % plDebug:trace_this(),
         gen_fsm:send_event(Gateway, {client_message, 
             #pl_client_msg{
+                id=Id,
                 from=ParticipantId,
                 to=To,
                 type=Type,
                 body=Body
             }})
-    catch 
-        error:{badmatch, _} -> 
-            % If we receive a bad message, do
-            % not forward to Gateway.
-            % TODO: send client an error message in response.
-            io:format("Got unparseable client msg: ~p~n", RawMsg)
+    catch error:{badmatch, Val} -> 
+        gen_fsm:send_all_state_event(Gateway, {bad_message, [
+            {value, Val},
+            {raw_message, RawMsg}
+        ]})
     end.
 
 listen_loop(LD={WebSocket,ParticipantId,Gateway}) ->
