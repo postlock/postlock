@@ -53,9 +53,9 @@ module("transactions");
             }),
             test_messages = function() {
                 // clients 0 and 1 should get the same thing from the server:
-                var sent_transaction = clients[0].postlock.participant_id();
+                var sent_transaction = mk_transaction(clients[0].postlock.participant_id());
                 // set 'in_response_to' field.
-                sent_transaction['in_response_to'] = "0.0";
+                //sent_transaction['in_response_to'] = "0.0";
                 deepEqual(clients[0].received, sent_transaction, 
                     "Client 0 got expected message from server");
                 deepEqual(clients[1].received, sent_transaction, 
@@ -67,9 +67,8 @@ module("transactions");
             client.received = null;
             client.postlock.set_cb(
                'participant_message', function(msg) {
-                   console.log("asdf");
                    var i=0, result = true;
-                   client.received = msg;
+                   client.received = msg.body;
                    for (;i < clients.length;i++) result = result && clients[i].received !== null;
                    if (result) test_messages();
                });

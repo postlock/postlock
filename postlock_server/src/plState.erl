@@ -93,6 +93,20 @@ handle_call(Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
+handle_cast({transaction_result, Result}, State) ->
+    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
+        from=1,
+        to=2,
+        type="participant_message",
+        body=Result
+    }}),
+    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
+        from=1,
+        to=3,
+        type="participant_message",
+        body=Result
+    }}),
+    {noreply, State};
 handle_cast(Msg, State) ->
     io:format("plState:handle_cast got ~p~n",[Msg]),
     {noreply, State}.
