@@ -23,7 +23,15 @@
 -define(SYSTEM_USER, "postlock_system").
 -define(SESSION_SERVER_PARTICIPANT_ID, 0).
 
--include("plSession.hrl").
+-record(pl_participant, {
+    id,                % participant id
+    username = unknown,% defined after authentication
+    process_id,        % erlang PID
+    joined = now(),    %
+    status,
+    participant_data
+}).
+
 % needed for #pl_client_msg
 -include("plMessage.hrl").
 
@@ -126,12 +134,19 @@ handle_call(Request, From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 %% Update participant ID.
-handle_cast({update_participant_data, #pl_participant{id=Id} = ParticipantData}, 
+handle_cast({update_participant_data, PData}, 
     #state{participants = P} = State) ->
     % Only username update is currently supported
     % TODO: check for case when Id doesnt refer to valid participant.
+    {id, Id} = lists:keyfind(id, 1, PData),
+    {username, Username} = lists:keyfind(username, 1, PData),
+    % TODO: handle case in which lookup returns none
+    {value, Participant} = gb_trees:lookup(Id, P),
     NewState = State#state{participants = 
-                    gb_trees:update(Id,ParticipantData,P)}, 
+                    gb_trees:update(Id,Participant#pl_participant{
+                        username=Username,
+                        status=authenticated
+                    },P)}, 
     {noreply, NewState};
 
 %% Called when a client disconnects.
@@ -276,7 +291,7 @@ pid_to_participant(Pid, Participants) ->
 
 pid_to_participant_1(_Pid, none) ->
     none;
-pid_to_participant_1(Pid, {_Key, Val, Iter}=T) ->
+pid_to_participant_1(Pid, {_Key, Val, Iter}) ->
     case Val#pl_participant.process_id == Pid of
         true ->  Val;
         false -> pid_to_participant_1(Pid, gb_trees:next(Iter))

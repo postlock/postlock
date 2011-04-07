@@ -26,10 +26,11 @@
 %%% postlock_message - the contents of a parsed json message
 %%% ----------------------------------------------------------
 -record(pl_client_msg, {
+    id,                 % id (integer)
     from,               % participant id (integer)
     to,                 % participant id (integer)
     type,               % message type (string)
-    body                 % message payload
+    body                % message payload
 }).
 
 -endif. %PL_MESSAGE_HRL

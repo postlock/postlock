@@ -11,11 +11,10 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
         url: spec.url,
         connection: null,
         state: 'idle',
-        state_data: {},
         fun: {
-                disconnect: function(reason) {
+                disconnect: function() {
                     if (my.state !== 'idle') {
-                        my.fun.connection_state_change("disconnect", 'idle', {reason: reason});
+                        my.fun.connection_state_change("disconnect", 'idle');
                         my.connection.close();
                     }
                 },
@@ -27,7 +26,7 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                             msg: msg }]);
                     } else {
                         // add 'id' field to message
-                        //msg['id'] = instance.data.counters.message_id.get_id(); 
+                        msg['id'] = instance.data.connection.message_id_counter.get_value(); 
                         return my.fun.websocket_safe_send(msg);
                     }
                 },
@@ -39,13 +38,13 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                     my.connection.onclose=my.cb.wrap_signal("ws_onclose");
                     my.connection.onerror=my.cb.wrap_signal("ws_onerror");
                 },
-                connection_state_change: function(message, new_state, state_data) {
+                connection_state_change: function(message, new_state) {
                     var oldstate = my.state;
+                    if (oldstate === new_state) return;
                     my.state = new_state;
-                    my.state_data = state_data || {};
                     // update current handle_incoming_msg function
                     my.fun.handle_incoming_msg.current = my.fun.handle_incoming_msg[my.state];
-                    my.cb.fire("connection_state_change", [oldstate, new_state, message]);
+                    my.cb.fire_async("connection_state_change", [oldstate, new_state, message]);
                 },
                 websocket_safe_send: function (data_obj) {
                     var data = JSON.stringify(data_obj);
@@ -108,27 +107,17 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                         switch (msg_obj.type) {
                             case "auth_challenge": 
                                 if (!("challenge_type" in msg_obj.body)) throw_ex("bad auth challenge", {challenge: msg_obj});
-                                if (!(msg_obj.body["challenge_type"] in my.fun.auth)) throw_ex("unsupported auth type: "+ msg_obj.body["challenge_type"], {challenge: msg_obj});
-                                my.fun.websocket_safe_send({type: "auth_response", body: my.fun.auth[msg_obj.body["challenge_type"]](msg_obj)});
+                                if (!(msg_obj.body["challenge_type"] in my.fun.auth)) throw_ex(
+                                    "unsupported auth type: "+ msg_obj.body["challenge_type"],
+                                    {challenge: msg_obj});
+                                my.fun.websocket_safe_send({id: my.fun.get_message_id(), type: "auth_response", body: my.fun.auth[msg_obj.body["challenge_type"]](msg_obj)});
                                 break;
-                            case "auth_result":
-                                switch ((msg_obj.body && ("result" in msg_obj.body))?msg_obj.body['result']:"") {
-                                    case 'success':
-                                        // set client id.
-                                        instance.data.config['participant_id'] = msg_obj.body.participant_id;
-                                        instance.data.config['session_id'] = msg_obj.body.participant_id;
-                                        // set prefix for oid's created by this participant.
-                                        if (instance.data.counters.object_id) instance.data.counters.object_id.set_prefix(msg_obj.body.participant_id + ".");
-                                        my.fun.connection_state_change(msg_obj, 'connected');
-                                        my.cb.fire_async('connected');
-                                        break;
-                                    case 'failure':
-                                        my.fun.disconnect("auth_failure");
-                                        break;
-                                    default:
-                                        // missing or unexpected "result" -> bad message!
-                                        return false;
-                                };
+                            case "auth_success":
+                                // set client id.
+                                instance.config['participant_id'] = msg_obj.body.participant_id;
+                                instance.config['session_id'] = msg_obj.body.participant_id;
+                                my.fun.connection_state_change(msg_obj, 'connected');
+                                my.cb.fire_async('connected');
                                 break;
                             default:
                                return false;
@@ -154,44 +143,50 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                 }   // end handle_incoming_msg
             }       // end fun
         };          // end my
+        // connection-related data for instance:
+        instance.data.connection = {};
+        // create counter for message id:
+        instance.data.connection.message_id_counter = invoke("modules.counter");
+        // create utility function for getting next message id
+        my.fun.get_message_id = function() {return instance.data.connection.message_id_counter.get_value();};
         my.fun.handle_incoming_msg.current = my.fun.handle_incoming_msg.idle;
         // Register callbacks
         // handle incoming message from server
         my.cb.set_internal_cb("ws_onopen", function () {
-            my.fun.websocket_safe_send({type: "client_connect"});
+            my.fun.websocket_safe_send({id: my.fun.get_message_id(), type: "client_connect"});
             // We don't want users hooking into ws_onopen.
             // Use the 'connection_state_change' event instead.
             return {skip_user_cb: true};
         });
-        my.cb.set_internal_cb("ws_onmessage", function (msg) {
-            var ret, t = null;
+        my.cb.set_internal_cb("ws_onmessage", function (raw_msg) {
+            var msg;
+            // Try to process the JSON message
             try {
-                t = JSON.parse(msg.data);
-            } catch (e) {
-                my.cb.fire("error", ["parsing", e, msg]);
-            }
-            if (t !== null)  {
-                try {
-                    ret = my.fun.handle_incoming_msg.current(t);
-                } catch (e) {
-                    // TODO: maybe fire a callback...
-                    my.cb.fire("error",["message_processing", e]);
+                msg = JSON.parse(raw_msg.data);
+                if (msg.type === 'error') {
+                    // If the message is an error, handle it accordingly
+                    my.cb.fire_async('error', ['remote_error', msg]);
+                } else {
+                    if (my.fun.handle_incoming_msg.current(msg) !== true) {
+                        my.cb.fire_async("error", ['unexpected_message', my.state, msg]);
+                    }
                 }
-                if (!ret) {
-                    if (t.type === "error") my.cb.fire("error", ["remote_error", t]);
-                    else my.cb.fire("error", ["unexpected_message", my.state, t]);
-                }
+            } catch (ex) {
+                my.cb.fire_async('error', ['exception', ex, raw_msg]);
             }
-            else console.log("failed to parse incoming message '" + msg.data +"'");
         });
         my.cb.set_internal_cb("ws_onclose", function () {
-            // TODO: attempt to re-open the connection
-            var a = invoke("util.args2array", arguments);
-            console.log("ws_onclose fired, arguments: " + a);
+            // forward this to the signal handler for 'error'.
+            my.cb.fire_async('connection_closed');
         });
         my.cb.set_internal_cb("ws_error", function () {
-            // TODO: attempt to handle the error
-            console.log("ws_error fired, arguments: " + invoke("util.args2array",arguments));
+            // forward this to the signal handler for 'error'.
+            my.cb.fire_async('error', ['websocket', ex, invoke("util.args2array",arguments)]);
+        });
+        my.cb.set_internal_cb("error", function() {
+            // On a remote error, the server will close the
+            // websocket, we we don't have to.
+            if (args[0] !== 'remote_error') my.fun.disconnect();
         });
         // return exports
         return {

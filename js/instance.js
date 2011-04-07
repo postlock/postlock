@@ -4,14 +4,8 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     // all non-static code and objects are children.
     var instance = {
             exports: {}, 
-            data: {
-                // configuration data used by the instance
-                config: {},
-                // various counters
-                counters: {},
-                // the local copies of postlock objects
-                objects: {}
-            }
+            config: {},
+            data: {}
         },
         fun = {},
         invoke = function(fun, args) {
@@ -31,7 +25,6 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     });
 
     // ---- data belonging to postlock instance ----
-    instance.data.counters.message_id = invoke("modules.counter");
     //instance.data.counters.client_message_id = invoke("modules.counter");
     //instance.data.counters.last_server_msg_id = 0;
     //instance.data.objects.set(invoke("modules.meta_object", ({cb: instance.cb})));
@@ -45,8 +38,8 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     instance.exports.disconnect = function() {instance.connection.disconnect(); return instance.exports;};
     instance.exports.is_connected = instance.connection.is_connected;
     // session information:
-    instance.exports.session_id = function() {return instance.data.config.session_id+0;};
-    instance.exports.participant_id = function() {return instance.data.config.participant_id+0};
+    instance.exports.session_id = function() {return instance.config.session_id+0;};
+    instance.exports.participant_id = function() {return instance.config.participant_id+0};
     // messaging: 
     instance.exports.send = function(message) {instance.connection.send(message); return instance.exports;};
     // callback registration: 
@@ -68,18 +61,6 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     instance.exports.make_transaction = function () {
         return invoke("modules.transaction");
     };
-
-    // ---- callbacks defined on instance ----
-    instance.cb.set_user_cb("error", function() {
-        var i;
-        console.log(invoke("util.get_timestamp") + 
-            " - error: " + (arguments[0] || "") + 
-            " " + arguments.length + " arguments:");
-        for (i = 0; i < arguments.length; i++) {
-		console.dir(arguments[i]);
-		if (arguments[i].stack) console.log(arguments[i].stack);
-	}
-    });
 
     // CREATE meta-object
     return instance.exports;
