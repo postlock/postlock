@@ -13,7 +13,7 @@
 %%% Functions for dealing with object types.
 %%%-------------------------------------------------------------------
 new_obj(Mod) -> {Mod, apply(Mod, new_obj, [])}.
-get_oid({Mod, Obj}) -> {Mod, apply(Mod, get_oid, [Obj])}.
+get_oid({Mod, Obj}) -> "0.0.0". %{Mod, apply(Mod, get_oid, [Obj])}.
 execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with storage implementations.

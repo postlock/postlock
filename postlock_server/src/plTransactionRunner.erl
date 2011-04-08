@@ -24,5 +24,17 @@ listen_loop(StateServerPid) ->
     end.
 
 process_transaction(T, _StateServerPid) ->
-    % STUB
-    T.
+    % TODO: error handling
+    {ok, {array, Commands}} = plMessage:json_get_value([ops], T),
+    lists:foldl(fun run_command/2, plObject:new_state(plStorageTerm), Commands).
+
+run_command(Command, Objects={Mod, State}) ->
+    {ok, Cmd} = plMessage:json_get_value([cmd], Command),
+    {ok, {array, Params}} = plMessage:json_get_value([params], Command),
+    % TODO: differentiate between different commands
+    [H|_] = Params,
+    {ok, Type} = plMessage:json_get_value([type], H),
+    % TODO: type dependent creation
+    Obj = plObject:new_obj(plTypeDict),
+    plObject:create(Obj, {plStorageTerm, State}),
+    Objects.

@@ -7,21 +7,19 @@
 %%%-------------------------------------------------------------------
 
 -module(plTypeDict).
--export([new/0, apply/2, xform/2]).
--compile({no_auto_import, [apply/2]}).
+-export([new_obj/0, execute/2, xform/2]).
 
-new() ->
+new_obj() ->
     dict:new().
 
-apply({set, Key, Value}, Dict) ->
+execute({set, Key, Value}, Dict) ->
     dict:store(Key, Value, Dict);
-apply({unsafe_set, Key, Value}, Dict) ->
-    apply({set, Key, Value}, Dict);
-apply({remove, Key, Value}, Dict) ->
+execute({unsafe_set, Key, Value}, Dict) ->
+    execute({set, Key, Value}, Dict);
+execute({remove, Key, Value}, Dict) ->
     dict:erase(Key, Value, Dict);
-apply({unsafe_remove, Key, Value}, Dict) ->
-    apply({remove, Key, Value}, Dict).
-
+execute({unsafe_remove, Key, Value}, Dict) ->
+    execute({remove, Key, Value}, Dict).
 
 xform({set, Key, Value1}, {set, Key, _Value2}) ->
     {fail, {set, Key, Value1}, nop};
