@@ -7,13 +7,16 @@
 %%%-------------------------------------------------------------------
 
 -module(plTypeData).
--export([new/0, apply/2, xform/2]).
+-export([new_obj/1, execute/2, xform/2, get_oid/1]).
+-define(DEFAULT_VALUE, undefined).
 
-new() ->
-    undefined.
+get_oid({Oid, _}) -> Oid.
 
-apply({set, Value}, _) ->
-    Value.
+new_obj(Oid) ->
+    {Oid, ?DEFAULT_VALUE}.
+
+execute({set, Value}, {Oid, _OldVal}) ->
+    {Oid, Value}.
 
 xform({_Op, Value1}, {set, _Value2}) when _Op == set; _Op == unsafe_set -> 
     {fail, {set, Value1}, nop};
