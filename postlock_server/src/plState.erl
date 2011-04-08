@@ -94,6 +94,7 @@ handle_call(Request, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast({transaction_result, Result}, State) ->
+    % TODO: process result
     gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=2,

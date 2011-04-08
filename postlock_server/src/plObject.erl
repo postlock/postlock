@@ -12,17 +12,21 @@
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with object types.
 %%%-------------------------------------------------------------------
-new_obj(Mod) -> {Mod, apply(Mod, new_obj, [])}.
-get_oid({Mod, Obj}) -> "0.0.0". %{Mod, apply(Mod, get_oid, [Obj])}.
+
+new_obj(Mod, Oid) -> {Mod, apply(Mod, new_obj, [Oid])}.
+get_oid({Mod, Obj}) -> apply(Mod, get_oid, [Obj]).
 execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with storage implementations.
 %%%-------------------------------------------------------------------
 new_state(Mod) -> {Mod, apply(Mod, new_state, [])}.
+get_object(Oid, {Mod, State}) -> apply(Mod, get_object, [Oid, State]).
 delete(Oid, {Mod, State}) -> {Mod, apply(Mod, delete, [Oid, State])}.
-create(Obj, {Mod, State}) -> {Mod, apply(Mod, create, [Obj, State])}.
+insert(Obj, {Mod, State}) -> {Mod, apply(Mod, insert, [Obj, State])}.
 update(Obj, {Mod, State}) -> {Mod, apply(Mod, update, [Obj, State])}.
-get(Oid, {Mod, State}) -> {Mod, apply(Mod, get, [Oid, State])}.
 is_set(Oid, {Mod, State}) -> {Mod, apply(Mod, is_set, [Oid, State])}.
 % only needed by ETS so far
-destroy({Mod, State}) -> apply(Mod, destroy, [State]).
+destroy({Mod, State}) -> case erlang:function_exported(Mod, destroy, 1) of
+        true -> apply(Mod, destroy, [State]);
+        false -> noop
+    end.
