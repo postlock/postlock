@@ -95,17 +95,19 @@ handle_call(Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast({transaction_result, Result}, State) ->
     % TODO: process result
+    io:format("~p ~n", [Result]),
+    
     gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=2,
         type="participant_message",
-        body=Result
+        body=[]
     }}),
     gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=3,
         type="participant_message",
-        body=Result
+        body=[]
     }}),
     {noreply, State};
 handle_cast(Msg, State) ->

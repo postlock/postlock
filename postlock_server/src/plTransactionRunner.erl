@@ -23,18 +23,22 @@ listen_loop(StateServerPid) ->
             {bad_message, BadValue}
     end.
 
+% TODO: error handling
 process_transaction(T, _StateServerPid) ->
-    % TODO: error handling
     {ok, {array, Commands}} = plMessage:json_get_value([ops], T),
-    lists:foldl(fun run_command/2, plObject:new_state(plStorageTerm), Commands).
+    lists:foldl(fun process_command/2, plObject:new_state(plStorageTerm), Commands).
 
-run_command(Command, Objects={Mod, State}) ->
+process_command(Command, Objects) ->
     {ok, Cmd} = plMessage:json_get_value([cmd], Command),
     {ok, {array, Params}} = plMessage:json_get_value([params], Command),
-    % TODO: differentiate between different commands
-    [H|_] = Params,
-    {ok, Type} = plMessage:json_get_value([type], H),
-    % TODO: type dependent creation
-    Obj = plObject:new_obj(plTypeDict),
-    plObject:create(Obj, {plStorageTerm, State}),
-    Objects.
+    execute_command(Cmd, Params, Objects).
+
+execute_command("create", [Param1|_], Objects) ->
+    {ok, Type} = plMessage:json_get_value([type], Param1),
+    {ok, Oid} = plMessage:json_get_value([oid], Param1),
+    case Type of
+        "data" -> Obj = plObject:new_obj(plTypeData, Oid);
+        "dict" -> Obj = plObject:new_obj(plTypeDict, Oid);
+        "list" -> Obj = plObject:new_obj(plTypeList, Oid)
+    end,
+    plObject:insert(Obj, Objects).

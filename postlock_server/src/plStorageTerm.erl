@@ -16,7 +16,7 @@
     % standard storage implementation functions
     delete/2,
     new_state/0,
-    create/2,
+    insert/2,
     update/2,
     get/2,
     is_set/2,
@@ -26,7 +26,7 @@
 %% These records are used internally by this module.
 -record(obj, { % Obj contains all data associated with one object.
     action = none,   % what happened to object: 
-                     % create | delete | modify | none
+                     % insert | delete | modify | none
     object           % the object itself
 }).
 
@@ -34,7 +34,7 @@ new_state() ->
     %% state is simply a gb_tree
     gb_trees:empty().
 
-create(Obj, State) -> set(Obj, State, create).
+insert(Obj, State) -> set(Obj, State, insert).
 update(Obj, State) -> set(Obj, State, modify).
 
 set(Obj, State, Action) ->

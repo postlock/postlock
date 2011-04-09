@@ -7,17 +7,20 @@
 %%%-------------------------------------------------------------------
 
 -module(plTypeList).
--export([new/0, apply/2, xform/2]).
+-export([new_obj/1, get_oid/1, execute/2, xform/2]).
 
-new() ->
-    [].
+new_obj(Oid) ->
+    {Oid, []}.
 
-apply({insert, Position, Value}, List) ->
+get_oid({Oid, _}) ->
+    Oid.
+
+execute({insert, Position, Value}, {Oid, List}) ->
     {List0, List1} = lists:split(Position, List), 
-    List0 ++ [Value] ++ List1;
-apply({remove, Position}, List) ->
+    {Oid, List0 ++ [Value] ++ List1};
+execute({remove, Position}, {Oid, List}) ->
     {List0, List1} = lists:split(Position, List),
-    List0 ++ lists:nthtail(1, List1).
+    {Oid, List0 ++ lists:nthtail(1, List1)}.
 
 xform({insert, Position1, Value1}, {insert, Position2, Value2}) when Position1 =< Position2 ->
     {ok, {insert, Position1, Value1}, {insert, Position2 + 1, Value2}};

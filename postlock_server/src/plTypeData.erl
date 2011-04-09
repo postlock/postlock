@@ -8,18 +8,19 @@
 
 -module(plTypeData).
 
--export([new_obj/1, execute/2, xform/2, get_oid/1]).
+-export([new_obj/1, get_oid/1, execute/2, xform/2]).
 -define(DEFAULT_VALUE, undefined).
-
-get_oid({Oid, _}) -> Oid.
 
 new_obj(Oid) ->
     {Oid, ?DEFAULT_VALUE}.
 
+get_oid({Oid, _}) ->
+    Oid.
+
 execute({set, Value}, {Oid, _OldVal}) ->
     {Oid, Value};
-execute({unsafe_set, Value}, Data) ->
-    execute({set, Value}, Data).
+execute({unsafe_set, Value}, Obj) ->
+    execute({set, Value}, Obj).
 
 xform({set, Value1}, {set, _Value2}) -> 
     {fail, {set, Value1}, nop};

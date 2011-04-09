@@ -7,19 +7,22 @@
 %%%-------------------------------------------------------------------
 
 -module(plTypeDict).
--export([new_obj/0, execute/2, xform/2]).
+-export([new_obj/1, get_oid/1, execute/2, xform/2]).
 
-new_obj() ->
-    dict:new().
+new_obj(Oid) ->
+    {Oid, dict:new()}.
 
-execute({set, Key, Value}, Dict) ->
-    dict:store(Key, Value, Dict);
-execute({unsafe_set, Key, Value}, Dict) ->
-    execute({set, Key, Value}, Dict);
-execute({remove, Key, Value}, Dict) ->
-    dict:erase(Key, Value, Dict);
-execute({unsafe_remove, Key, Value}, Dict) ->
-    execute({remove, Key, Value}, Dict).
+get_oid({Oid, _}) ->
+    Oid.
+
+execute({set, Key, Value}, {Oid, Dict}) ->
+    {Oid, dict:store(Key, Value, Dict)};
+execute({unsafe_set, Key, Value}, Obj) ->
+    execute({set, Key, Value}, Obj);
+execute({remove, Key, Value}, {Oid, Dict}) ->
+    {Oid, dict:erase(Key, Value, Dict)};
+execute({unsafe_remove, Key, Value}, Obj) ->
+    execute({remove, Key, Value}, Obj).
 
 xform({set, Key, Value1}, {set, Key, _Value2}) ->
     {fail, {set, Key, Value1}, nop};
