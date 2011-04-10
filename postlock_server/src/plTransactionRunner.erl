@@ -23,6 +23,22 @@ listen_loop(StateServerPid) ->
             {bad_message, BadValue}
     end.
 
-process_transaction(_T, _StateServerPid) ->
-    % STUB
-    ok.
+% TODO: error handling
+process_transaction(T, _StateServerPid) ->
+    {ok, {array, Commands}} = plMessage:json_get_value([ops], T),
+    lists:foldl(fun process_command/2, plObject:new_state(plStorageTerm), Commands).
+
+process_command(Command, Objects) ->
+    {ok, Cmd} = plMessage:json_get_value([cmd], Command),
+    {ok, {array, Params}} = plMessage:json_get_value([params], Command),
+    execute_command(Cmd, Params, Objects).
+
+execute_command("create", [Param1|_], Objects) ->
+    {ok, Type} = plMessage:json_get_value([type], Param1),
+    {ok, Oid} = plMessage:json_get_value([oid], Param1),
+    case Type of
+        "data" -> Obj = plObject:new_obj(plTypeData, Oid);
+        "dict" -> Obj = plObject:new_obj(plTypeDict, Oid);
+        "list" -> Obj = plObject:new_obj(plTypeList, Oid)
+    end,
+    plObject:insert(Obj, Objects).

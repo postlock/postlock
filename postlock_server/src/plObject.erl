@@ -14,6 +14,7 @@
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with object types.
 %%%-------------------------------------------------------------------
+
 new_obj(Mod, Oid) -> {Mod, apply(Mod, new_obj, [Oid])}.
 get_oid({Mod, Obj}) -> apply(Mod, get_oid, [Obj]).
 execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
