@@ -14,9 +14,9 @@
     insert/2,
     update/2,
     get_object/2,
-    is_set/2
+    is_set/2,
+    destroy/1
 ]).
--include_lib("eunit/include/eunit.hrl").
 -define(ETS_NAME, ?MODULE).
 -define(ETS_OPTIONS, [{keypos, 2}]).
 -record(ets_obj, {
@@ -33,7 +33,7 @@ update(Obj, State) -> write(Obj, State).
 write(Obj, State) -> ets:insert(State, #ets_obj{
     obj=Obj,
     oid=plObject:get_oid(Obj)}),
-    Obj. % TODO: throw exception in case of error
+    State. % TODO: throw exception in case of error
 % STUBS
 get_object(Oid, Tid) ->
     case ets:lookup(Tid, Oid) of
@@ -49,13 +49,7 @@ is_set(_Oid, _State) ->
     %TODO
     ok.
 
-%%%-------------------------------------------------------------------
-%%% EUnit tests
-%%%-------------------------------------------------------------------
-read_write_test_() ->
-    Data = plObject:new_obj(plTypeData, 0),
-    State = plObject:new_state(?MODULE),
-    plObject:insert(Data, State),
-    Retrieved = plObject:get_object(plObject:get_oid(Data), State),
-    %%[{#ets_obj{oid='$1', _ = '_'},[],['$1']}])]),
-    ?assert(Retrieved =:= Data).
+destroy(Tid) ->
+    ets:delete(Tid).
+
+

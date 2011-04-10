@@ -9,6 +9,8 @@
 %%%-------------------------------------------------------------------
 -module(plObject).
 -compile(export_all).
+-include_lib("eunit/include/eunit.hrl").
+-define(STORAGE_MODULES, [plStorageEts, plStorageTerm]).
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with object types.
 %%%-------------------------------------------------------------------
@@ -29,3 +31,16 @@ destroy({Mod, State}) -> case erlang:function_exported(Mod, destroy, 1) of
         true -> apply(Mod, destroy, [State]);
         false -> noop
     end.
+%%%-------------------------------------------------------------------
+%%% Unit tests
+%%%-------------------------------------------------------------------
+storage_test_() ->
+    [{"Storage test for module "++ atom_to_list(Mod),
+    fun() ->
+        Data = plObject:new_obj(plTypeData, 0),
+        State = plObject:new_state(Mod),
+        State2 = plObject:insert(Data, State),
+        Retrieved = plObject:get_object(plObject:get_oid(Data), State2),
+        ?assert(Retrieved =:= Data)
+     end} || Mod <- ?STORAGE_MODULES].
+
