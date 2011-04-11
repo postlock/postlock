@@ -20,7 +20,9 @@
     update/2,
     get/2,
     is_set/2,
-    destroy/1
+    destroy/1,
+    iterator/1,
+    next/1
 ]).
 
 %% These records are used internally by this module.
@@ -76,3 +78,13 @@ is_set(Oid, State) ->
     end.
 
 destroy(_State) -> ok.
+
+iterator(State) ->
+    gb_trees:iterator(State).
+
+next(Iter) ->
+    Next = gb_trees:next(Iter),
+    case Next of
+        {Oid, Object, Iter1} -> {Oid, Object#obj.object, Object#obj.action, Iter1};
+        none -> none
+    end.

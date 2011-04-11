@@ -29,7 +29,8 @@
 -record(state, {
     session_server,
     sessionid,
-    transaction_runner
+    transaction_runner,
+    storage
 }).
 
 %%====================================================================
@@ -58,10 +59,12 @@ init([SessionServer, SessionId]) ->
     make_session_tables(SessionId), 
     create_root_node(SessionId),
     TransactionRunner = spawn_link(plTransactionRunner, init, [self()]),
+    Storage = plObject:new_state(plStorageEts),
     {ok, #state{
         session_server = SessionServer,
         sessionid = SessionId,
-        transaction_runner = TransactionRunner
+        transaction_runner = TransactionRunner,
+        storage = Storage
     }}.
 
 %%--------------------------------------------------------------------
@@ -93,23 +96,23 @@ handle_call(Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-handle_cast({transaction_result, Result}, State) ->
-    % TODO: process result
-    io:format("~p ~n", [Result]),
+handle_cast({transaction_result, {plStorageTerm, Storage}}, State) ->
+    Iter = plStorageTerm:iterator(Storage),
+    State1 = merge_transaction_result(plStorageTerm:next(Iter), State),
     
-    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
+    gen_server:cast(State1#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=2,
         type="participant_message",
         body=[]
     }}),
-    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
+    gen_server:cast(State1#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=3,
         type="participant_message",
         body=[]
     }}),
-    {noreply, State};
+    {noreply, State1};
 handle_cast(Msg, State) ->
     io:format("plState:handle_cast got ~p~n",[Msg]),
     {noreply, State}.
@@ -185,3 +188,14 @@ get_object(SessionId, Oid) ->
 
 drop_tables(SessionId) ->
     [mnesia:delete_table(T) || T <- sessionid_to_tablenames(SessionId)].
+
+merge_transaction_result(none, State) -> State;
+merge_transaction_result({Oid, Obj, Action, Iter}, State) ->
+    case Action of
+        insert -> plObject:insert(Obj, State#state.storage),
+        update -> plObject:update(Oid, State#state.storage),
+        delete -> plObject:delete(Oid, State#state.storage),
+        none -> ok.
+    end,
+    Next = plStorageTerm:next(Iter),
+    merge_transaction_result(Next, State).
