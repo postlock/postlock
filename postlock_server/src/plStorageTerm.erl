@@ -20,8 +20,9 @@
     update/2,
     get_object/2,
     is_set/2,
-    % function for iterating over stored objects
-    get_all_objects/1
+    % functions for iterating over stored objects
+    iterator/1,
+    next/1
 ]).
 
 
@@ -89,3 +90,13 @@ is_set(Oid, State) ->
 get_all_objects(State) ->
     [{Oid, Action, Obj} || 
         {Oid, #obj{action=Action, object=Obj}} <- gb_trees:to_list(State)].
+
+iterator(State) ->
+    gb_trees:iterator(State).
+
+next(Iter) ->
+    Next = gb_trees:next(Iter),
+    case Next of
+        {Oid, Object, Iter1} -> {Oid, Object#obj.object, Object#obj.action, Iter1};
+        none -> none
+    end.
