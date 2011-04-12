@@ -11,8 +11,7 @@
     % standard storage implementation functions
     delete/2,
     new_state/0,
-    insert/2,
-    update/2,
+    store/2,
     get_object/2,
     is_set/2,
     destroy/1
@@ -25,16 +24,13 @@
 }).
 
 new_state() ->
-    %% state is simply a gb_tree
     ets:new(?ETS_NAME, ?ETS_OPTIONS).
 
-insert(Obj, State) -> write(Obj, State).
-update(Obj, State) -> write(Obj, State).
-write(Obj, State) -> ets:insert(State, #ets_obj{
+store(Obj, State) -> ets:insert(State, #ets_obj{
     obj=Obj,
     oid=plObject:get_oid(Obj)}),
     State. % TODO: throw exception in case of error
-% STUBS
+
 get_object(Oid, Tid) ->
     case ets:lookup(Tid, Oid) of
         [] -> undefined;
@@ -45,9 +41,8 @@ delete(_Oid, _State) ->
     %TODO
     ok.
 
-is_set(_Oid, _State) ->
-    %TODO
-    ok.
+is_set(Oid, State) ->
+    get_object(Oid, State) =/= undefined.
 
 destroy(Tid) ->
     ets:delete(Tid).

@@ -21,12 +21,11 @@ execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with storage implementations.
 %%%-------------------------------------------------------------------
-new_state(Mod) -> {Mod, apply(Mod, new_state, [])}.
 get_object(Oid, {Mod, State}) -> apply(Mod, get_object, [Oid, State]).
+is_set(Oid, {Mod, State}) -> apply(Mod, is_set, [Oid, State]).
+new_state(Mod) -> {Mod, apply(Mod, new_state, [])}.
 delete(Oid, {Mod, State}) -> {Mod, apply(Mod, delete, [Oid, State])}.
-insert(Obj, {Mod, State}) -> {Mod, apply(Mod, insert, [Obj, State])}.
-update(Obj, {Mod, State}) -> {Mod, apply(Mod, update, [Obj, State])}.
-is_set(Oid, {Mod, State}) -> {Mod, apply(Mod, is_set, [Oid, State])}.
+store(Obj, {Mod, State}) -> {Mod, apply(Mod, store, [Obj, State])}.
 % only needed by ETS so far
 destroy({Mod, State}) -> case erlang:function_exported(Mod, destroy, 1) of
         true -> apply(Mod, destroy, [State]);
@@ -40,7 +39,7 @@ storage_test_() ->
     fun() ->
         Data = plObject:new_obj(plTypeData, 0),
         State = plObject:new_state(Mod),
-        State2 = plObject:insert(Data, State),
+        State2 = plObject:store(Data, State),
         Retrieved = plObject:get_object(plObject:get_oid(Data), State2),
         ?assert(Retrieved =:= Data)
      end} || Mod <- ?STORAGE_MODULES].

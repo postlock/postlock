@@ -192,10 +192,9 @@ drop_tables(SessionId) ->
 merge_transaction_result(none, State) -> State;
 merge_transaction_result({Oid, Obj, Action, Iter}, State) ->
     case Action of
-        insert -> plObject:insert(Obj, State#state.storage),
-        update -> plObject:update(Oid, State#state.storage),
-        delete -> plObject:delete(Oid, State#state.storage),
-        none -> ok.
+        store -> plObject:store(Obj, State#state.storage);
+        delete -> plObject:delete(Oid, State#state.storage);
+        none -> ok
     end,
     Next = plStorageTerm:next(Iter),
     merge_transaction_result(Next, State).

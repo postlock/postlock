@@ -16,19 +16,19 @@
     % standard storage implementation functions
     delete/2,
     new_state/0,
-    insert/2,
-    update/2,
+    store/2,
     get_object/2,
     is_set/2,
     % functions for iterating over stored objects
     iterator/1,
     next/1
 ]).
+-include_lib("eunit/include/eunit.hrl").
 
 
 %% These records are used internally by this module.
 -record(obj, { % Obj contains all data associated with one object.
-    action,          % what happened to object: insert | delete | update
+    action,          % what happened to object: store | delete 
     object           % the object itself
 }).
 
@@ -36,12 +36,9 @@ new_state() ->
     %% state is simply a gb_tree
     gb_trees:empty().
 
-insert(Obj, State) -> set(Obj, State, insert).
-update(Obj, State) -> set(Obj, State, update).
-
-set(Obj, State, Action) ->
+store(Obj, State) ->
     Oid = plObject:get_oid(Obj),
-    Val = #obj{action=Action, object=Obj},
+    Val = #obj{action=store, object=Obj},
     case gb_trees:is_defined(Oid, State) of
         true -> gb_trees:update(Oid, Val, State);
         false -> gb_trees:insert(Oid, Val, State)
@@ -91,6 +88,7 @@ get_all_objects(State) ->
     [{Oid, Action, Obj} || 
         {Oid, #obj{action=Action, object=Obj}} <- gb_trees:to_list(State)].
 
+% Tothmate's efficient solution (nice!)
 iterator(State) ->
     gb_trees:iterator(State).
 
@@ -100,3 +98,32 @@ next(Iter) ->
         {Oid, Object, Iter1} -> {Oid, Object#obj.object, Object#obj.action, Iter1};
         none -> none
     end.
+%%%-------------------------------------------------------------------
+%%% Unit tests
+%%%-------------------------------------------------------------------
+get_objects_test_() ->
+    % This test performs the following actions:
+    %          OID: |   0   |   1   |   2   |   3   |
+    % action: store |   X   |   X   |   X   |       |
+    % action: delete|       |   X   |   X   |   X   |
+    %               ---------------------------------
+    % Since the last action 'wins', the final actions
+    % should be:    |   s   |   d   |   d   |   d   |
+
+    Contents = 
+        [{store, plObject:new_obj(plTypeData, X)} 
+            || X <- lists:seq(0,2)] ++
+        [{delete, X} 
+            || X <- lists:seq(1,3)],
+        State = lists:foldl(
+            fun({Fun, Arg}, State) ->
+                apply(?MODULE, Fun, [Arg, State])
+            end, new_state(), Contents),
+    ObjectList = get_all_objects(State),
+    % the first element should have the action of store.
+    [?_assert(erlang:element(2, lists:keysearch(0, 1, ObjectList)) 
+        =:= {0, store, plObject:new_obj(plTypeData, 0)})|
+        % the remaining element should have the action of delete.
+        [?_assert(erlang:element(2, lists:keysearch(X, 1, ObjectList)) 
+            =:= {X, delete, undefined}) || X <- lists:seq(1,3)]].
+
