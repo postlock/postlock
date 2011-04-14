@@ -18,7 +18,7 @@ module("messages");
 
     // client to client messages are tested by connected two clients to the session, then
     // sending messages between them.
-    test("message delivery", function() {
+    test("message delivery - participant_message callback", function() {
         var clients = connect_clients({
             url: get_backend_url(),
             users: [
@@ -67,6 +67,148 @@ module("messages");
        expect(clients.length);
        stop();
     });
+
+
+    test("message delivery - message_router api", function() {
+        /* This test is designed to invoke the message router and ensure that
+         * the defined routes really work. For each message sent, we must check
+         * if the message has been delivered to all expected destinations (and
+         * only those destinations).
+         * routes:
+         *      client 0:
+         *          -> [0] // unconditional route
+         *          type: a -> [1]
+         *          type: b -> [2]
+         *          from: 2 -> [1, 4]
+         *          type: c, from: 2 -> [5]
+         *          
+         *
+         * tests:
+         * | test# | sender | receiver | type | dest. fun:
+         * ------------------------------------------------
+         * | 0     | 1      | 0        | msg  | 0 
+         * | 1     | 1      | 0        | a    | 0, 1
+         * | 2     | 1      | 0        | b    | 0, 2
+         * | 3     | 2      | 0        | msg  | 0, 1, 4
+         * | 4     | 2      | 0        | c    | 0, 1, 4, 5
+         */
+        var run_test, define_routes,
+            test_cases = [
+            // tests: [sender, receiver, type, dest. fun]
+            [1, 0, 'msg', [0]], 
+            [1, 0, 'a', [0, 1]],
+            [1, 0, 'b', [0, 2]],
+            [2, 0, 'msg', [0, 1, 4]],
+            [2  0, 'c', [0, 1, 4, 5]]],
+            test_results = {},
+            clear_results = function() {
+                var k;
+                for (k in test_results) {
+                    if (test_results.hasOwnProperty(k)) delete test_results[k];
+                }
+            },
+            destinations = function() {
+                var i, destinations = [],
+                for (i = 0; i < 6; i++) {
+                    (function(ix) {
+                        destinations.push(function(msg) {
+                            var j, 
+                                finished = true, 
+                                test_no = msg.body,
+                                all_expected_destinations = true;
+                            // save received messages as [destination no, msg]
+                            test_results[ix] = msg;
+                            // are we the last destination to get the message?
+                            // msg.body is the index of the test which generated the msg.
+                            for (j = 0; j < test_cases[test_no][3].length; j++) {
+                                finished = finished && (test_cases[test_no][3][j] in test_results);
+                            }
+                            if (finished) {
+                                // now that we're finished, we should make sure everything went well!
+                                for (j in test_results) {
+                                    if (!test_results.hasOwnProperty(j)) continue;
+                                    // is this an unexpected destination?
+                                    all_expected_destinations = all_expected_destinations &&
+                                        (test_cases[test_no][3].contains(j));
+                                    // did we get the expected message:
+                                    equal(test_results[j].from, 
+                                        ix2pid(test_cases[test_no][0]),
+                                        "msg sender is what is expected for test case "+ test_no + " (destination "+ ix+")");
+                                    equal(test_results[j].type, 
+                                        test_cases[test_no][0],
+                                        "msg type is what is expected for test case "+ test_no + " (destination "+ ix+")");
+                                    equal(test_results[j].body,
+                                        test_no,
+                                        "msg body is what is expected for test case "+ test_no + " (destination "+ix+")");
+                                }
+                                // qunit assertsions
+                                ok(all_expected_destinations, "no unexpected destinations for test case " + test_no);
+                                // call next test:
+                                run_test(test_no + 1);
+                            }
+                       });
+                    })(i);
+                }
+                return destinations;
+            }();
+            clients = connect_clients({
+                url: get_backend_url(),
+                users: [
+                    {username: "test_username_0", password: "test_password_0"}, 
+                    {username: "test_username_1", password: "test_password_1"}, 
+                    {username: "test_username_1", password: "test_password_1"}  
+                ],
+                on_all_connected: function() {
+                    define_routes();
+                    run_test(0);
+                }
+            }),
+            ix2pid = function(ix) {
+                return clients[ix].postlock.participant_id();
+            };
+        run_test = function(test_no) {
+            if (test_no == test_cases.length) {
+                // if this is the last test case, we are done:
+                start();
+            } else {
+                clear_results();
+                // send msg (test case format: [sender, receiver, type, dest. fun])
+                clients[test_cases[test_no][0]].postlock.send({
+                    to: ix2pid(test_cases[test_no][1]),
+                    type: test_cases[test_no][2],
+                    body: test_no});
+            }
+        };
+        define_routes = function() {
+            $([
+                [{}, [0]],
+                [{type: 'a'}, [1]],
+                [{type: 'b'}, [2]],
+                [{from: ix2pid(2)}, [1,4]],
+                [{type: 'c', from:ix2pid(2)}, [5]]
+            ]).each(function() {
+                var route_def = this;
+                $(route_def[1]).each(function() {
+                    var destination = this;
+                    clients[0].add_route(
+                        route_def[0],
+                        destination);
+                });
+            });
+        };
+
+        expect(
+            // all destinations expected test (1 per test case)
+            test_cases.length +
+            // msg content tests: (1 per destination)
+            (function() {
+                var sum = 0;
+                $(test_cases).each(sum+=this[3].length;);
+                return sum;
+            })());
+        stop();
+    });
+
 }); // ready()
 </script>
 </head>

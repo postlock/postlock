@@ -13,12 +13,9 @@ if (POSTLOCK) POSTLOCK.set("modules.message_router", function(spec) {
      * }
      */
     var my = {
-        any_field: '__any__',
-        fields: ['from', 'type'],
-        cb: spec.cb || invoke("modules.callback_manager",
-            {name:"main postlock object"}),
-        // routes are stored as field.value.field.value, eg:
-        // routes['from']['3']['type']['__any__'] = the_route
+        any_field: spec.any_field || '__any__',
+        fields: spec.fields || ['from', 'type'],
+        // routes are stored as [field1][field2] = [dest1, dest2, ...], eg:
         routes: {},
         fun: {
             get_destination_list: function(selector) {
@@ -43,13 +40,41 @@ if (POSTLOCK) POSTLOCK.set("modules.message_router", function(spec) {
             },
             add_route: function(selector, destination) {
                 (my.fun.get_destination_list(selector)).push(destination);
-            }
+            },
             remove_route: function(selector, destination) {
-                var destination_list = my.fun.get_destination_list(selector);
+                var i, destination_list = my.fun.get_destination_list(selector);
+                for (i = 0; i < destination_list.length; i++) {
+                    if (destination_list[i] === destination) destination_list[i] = null;
+                }
+            },
+            handle_incoming: function(msg) {
+                var i, destinations = function() {
+                        var j, ix, dest = my.routes;
+                        for (j=0; j < my.fields.length; j++) {
+                            if (msg[my.fields[j]] in dest) {
+                                ix = msg[my.fields[j]];
+                            } else {
+                                ix = my.any_field;
+                            }
+                            if (ix in dest) {
+                                dest = dest[ix];
+                            } else {
+                                return [spec.default_destination];
+                            }
+                        }
+                        return dest;
+                    }();
+                for (i = 0; i < destinations.length; i++) {
+                    if (typeof(destinations[i]) === 'function') destinations[i](msg);
+                }
             }
         }
     };
-    
+    return {
+        handle_incoming: my.fun.handle_incoming,
+        add_route: my.fun.add_route,
+        remove_route: my.fun.remove_route
+    };
 }); 
 })();
  

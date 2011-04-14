@@ -23,6 +23,17 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
         password: spec.password,
         username: spec.username
     });
+    instance.message_router = invoke("modules.message_router", {
+        any_field: '__any__',
+        fields: ['from','type'],
+        default_destination: function() {
+            console.log("no other destination for message");
+            console.dir(arguments);
+        }
+    });
+    // forward received messages to message_router
+    instance.cb.set_internal_cb('participant_message', 
+        instance.message_router.handle_incoming);
 
     // ---- data belonging to postlock instance ----
     //instance.data.counters.client_message_id = invoke("modules.counter");
@@ -42,6 +53,14 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     instance.exports.participant_id = function() {return instance.config.participant_id+0};
     // messaging: 
     instance.exports.send = function(message) {instance.connection.send(message); return instance.exports;};
+    instance.exports.add_route = function(selector, dest) {
+        instance.message_router.add_route(selector, dest); 
+        return instance.exports;
+    };
+    instance.exports.remove_route = function(selector, dest) {
+        instance.message_router.remove_route(selector, dest); 
+        return instance.exports;
+    };
     // callback registration: 
     instance.exports.set_cb = function() {instance.cb.set_user_cb.apply(this, arguments); return instance.exports;};
     // create functions for postlock objects:
