@@ -15,6 +15,7 @@ if (POSTLOCK) POSTLOCK.set("modules.message_router", function(spec) {
     var my = {
         any_field: spec.any_field || '__any__',
         fields: spec.fields || ['from', 'type'],
+        default_fallback: spec.fallback_destination,
         // routes are stored as [field1][field2] = [dest1, dest2, ...], eg:
         routes: {},
         fun: {
@@ -48,22 +49,30 @@ if (POSTLOCK) POSTLOCK.set("modules.message_router", function(spec) {
                 }
             },
             handle_incoming: function(msg) {
-                var i, destinations = function() {
-                        var j, ix, dest = my.routes;
-                        for (j=0; j < my.fields.length; j++) {
-                            if (msg[my.fields[j]] in dest) {
-                                ix = msg[my.fields[j]];
-                            } else {
-                                ix = my.any_field;
+                var i, destinations = function (dests, field_ix) {
+                        var j, k, new_dests = [];
+                        if (field_ix >= my.fields.length) {
+                            // turn an array of array of functions into an array of functions
+                            for (j = 0; j < dests.length; j++)
+                                for (k = 0; k < dests[j].length; k++)
+                                    new_dests.push(dests[j][k]);
+                            return new_dests;
+                        }
+                        for (j = 0; j < dests.length; j++) {
+                            if (msg[my.fields[field_ix]] in dests[j]) {
+                                // If a set of routes exists for the field's value,
+                                // pursue that branch.
+                                new_dests.push(dests[j][msg[my.fields[field_ix]]]);
                             }
-                            if (ix in dest) {
-                                dest = dest[ix];
-                            } else {
-                                return [spec.default_destination];
+                            if (my.any_field in dests[j]) {
+                                // If the 'any value' branch exists,
+                                // pursue that as well.
+                                new_dests.push(dests[j][my.any_field]);
                             }
                         }
-                        return dest;
-                    }();
+                        return arguments.callee(new_dests, field_ix + 1);
+                    }([my.routes], 0);
+                if (destinations.length == 0) destinations.push(my.fallback_destination);
                 for (i = 0; i < destinations.length; i++) {
                     if (typeof(destinations[i]) === 'function') destinations[i](msg);
                 }

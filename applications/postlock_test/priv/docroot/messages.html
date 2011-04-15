@@ -9,13 +9,13 @@
 <script type="text/javascript" src="http://localhost:8081/counter.js"></script>
 <script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
 <script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/message_router.js"></script>
 <script type="text/javascript" src="http://localhost:8081/instance.js"></script>
 <script type="text/javascript" src="testlib.js"></script>
 <script type="text/javascript">
 $(document).ready(function(){
 
 module("messages");
-
     // client to client messages are tested by connected two clients to the session, then
     // sending messages between them.
     test("message delivery - participant_message callback", function() {
@@ -68,7 +68,6 @@ module("messages");
        stop();
     });
 
-
     test("message delivery - message_router api", function() {
         /* This test is designed to invoke the message router and ensure that
          * the defined routes really work. For each message sent, we must check
@@ -99,7 +98,7 @@ module("messages");
             [1, 0, 'a', [0, 1]],
             [1, 0, 'b', [0, 2]],
             [2, 0, 'msg', [0, 1, 4]],
-            [2  0, 'c', [0, 1, 4, 5]]],
+            [2, 0, 'c', [0, 1, 4, 5]]],
             test_results = {},
             clear_results = function() {
                 var k;
@@ -108,7 +107,7 @@ module("messages");
                 }
             },
             destinations = function() {
-                var i, destinations = [],
+                var i, destinations = [];
                 for (i = 0; i < 6; i++) {
                     (function(ix) {
                         destinations.push(function(msg) {
@@ -129,13 +128,13 @@ module("messages");
                                     if (!test_results.hasOwnProperty(j)) continue;
                                     // is this an unexpected destination?
                                     all_expected_destinations = all_expected_destinations &&
-                                        (test_cases[test_no][3].contains(j));
+                                        (test_cases[test_no][3].lastIndexOf(parseInt(j,10)) > -1);
                                     // did we get the expected message:
                                     equal(test_results[j].from, 
                                         ix2pid(test_cases[test_no][0]),
                                         "msg sender is what is expected for test case "+ test_no + " (destination "+ ix+")");
                                     equal(test_results[j].type, 
-                                        test_cases[test_no][0],
+                                        test_cases[test_no][2],
                                         "msg type is what is expected for test case "+ test_no + " (destination "+ ix+")");
                                     equal(test_results[j].body,
                                         test_no,
@@ -189,21 +188,23 @@ module("messages");
             ]).each(function() {
                 var route_def = this;
                 $(route_def[1]).each(function() {
-                    var destination = this;
-                    clients[0].add_route(
+                    clients[0].postlock.add_route(
                         route_def[0],
-                        destination);
+                        destinations[this]);
                 });
             });
         };
-
+        clients[0].postlock.set_cb("no_destination_for_message", function(msg) {
+            console.dir(msg);
+            ok(false, "error: no destination for message");
+        });
         expect(
             // all destinations expected test (1 per test case)
             test_cases.length +
             // msg content tests: (1 per destination)
-            (function() {
+            3 * (function() {
                 var sum = 0;
-                $(test_cases).each(sum+=this[3].length;);
+                $(test_cases).each(function() {sum+=this[3].length;});
                 return sum;
             })());
         stop();

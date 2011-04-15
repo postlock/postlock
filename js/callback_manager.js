@@ -9,9 +9,9 @@ if (POSTLOCK) POSTLOCK.set("modules.callback_manager", function (spec) {
         invoke = function(fun, args) {
             var a = args || [], real_args = ('length' in a)?a:[a];
             return POSTLOCK.get(fun).apply(instance, real_args);
-	},
+	    },
     	my = {
-        async_delay: 4,
+        async_delay: 0,
         id: spec.name || "[unnamed object]",
         // debug state:
         debug: false,

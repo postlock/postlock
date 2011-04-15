@@ -26,10 +26,7 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     instance.message_router = invoke("modules.message_router", {
         any_field: '__any__',
         fields: ['from','type'],
-        default_destination: function() {
-            console.log("no other destination for message");
-            console.dir(arguments);
-        }
+        fallback_destination:  instance.cb.wrap_signal("no_destination_for_message")
     });
     // forward received messages to message_router
     instance.cb.set_internal_cb('participant_message', 
