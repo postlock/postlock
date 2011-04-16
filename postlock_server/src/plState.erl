@@ -82,8 +82,8 @@ handle_call({get_num_public_objects}, _From, State) ->
     {reply, Reply, State};
 
 handle_call({get_object, Oid}, _From, State) ->
-    % STUB
-    {reply, get_object(State#state.sessionid, Oid), State};
+    {reply, plObject:get_object(Oid, State#state.storage), State};
+    %{reply, get_object(State#state.sessionid, Oid), State};
 
 handle_call(Request, _From, State) ->
     io:format("plState:handle_call got ~p~n",[Request]),

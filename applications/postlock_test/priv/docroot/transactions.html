@@ -7,6 +7,7 @@
 <script type="text/javascript" src="http://localhost:8081/util.js"></script>
 <script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
 <script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/message_router.js"></script>
 <script type="text/javascript" src="http://localhost:8081/instance.js"></script>
 <script type="text/javascript" src="http://localhost:8081/counter.js"></script>
 <script type="text/javascript" src="testlib.js"></script>
@@ -24,11 +25,33 @@ module("transactions");
                     base_state: 0,
                     ops: [
                         {
-                            cmd: 'create',
-                            params: [{
-                                type: 'dict',
-                                oid: participant_id
-                            }]
+                            cmd: "create",
+                            params: {
+                                type: "data",
+                                oid: participant_id + "_0"
+                            }
+                        },
+                        {
+                            cmd: "create",
+                            params: {
+                                type: "dict",
+                                oid: participant_id + "_1"
+                            }
+                        },
+                        {
+                            cmd: "create",
+                            params: {
+                                type: "list",
+                                oid: participant_id + "_2"
+                            }
+                        },
+                        {
+                            cmd: "modify",
+                            params: {
+                                oid: participant_id + "_0",
+                                cmd: "set",
+                                value: "juhu"
+                            }
                         }
                     ]
                 }
