@@ -46,6 +46,13 @@ module("transactions");
                             }
                         },
                         {
+                            cmd: "create",
+                            params: {
+                                type: "data",
+                                oid: participant_id + "_3"
+                            }
+                        },
+                        {
                             cmd: "modify",
                             params: {
                                 oid: participant_id + "_0",
@@ -62,6 +69,21 @@ module("transactions");
                     ]
                 }
             },
+            var mk_transaction_2 = function(participant_id) {
+                return {
+                    base_state: 0,
+                    ops: [
+                        {
+                            cmd: "modify",
+                            params: {
+                                oid: participant_id + "_3",
+                                cmd: "set",
+                                value: "jahu"
+                            }
+                        }
+                    ]
+                }
+            },
             clients = connect_clients({
                 url: get_backend_url(),
                 users: [
@@ -73,6 +95,11 @@ module("transactions");
                         to: 1, // currently hardcoded participant id for state server
                         type: 'transaction',
                         body: mk_transaction(clients[0].postlock.participant_id())
+                    });
+                    clients[0].postlock.send({
+                        to: 1, // currently hardcoded participant id for state server
+                        type: 'transaction',
+                        body: mk_transaction_2(clients[0].postlock.participant_id())
                     });
                 },
                 on_failure: function() {

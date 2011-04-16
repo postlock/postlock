@@ -17,7 +17,8 @@ listen_loop(StateServerPid) ->
         {transaction, T} ->
             {Result, _pid} = process_transaction(T, StateServerPid),
             % returns the result of the transaction to state server
-            gen_server:cast(StateServerPid, {transaction_result, Result});
+            gen_server:cast(StateServerPid, {transaction_result, Result}),
+            listen_loop(StateServerPid);
         BadValue ->
             error_logger:error_report(["plTransactionRunner received unexpected message: ", BadValue]),
             {bad_message, BadValue}
@@ -52,7 +53,7 @@ execute_command("modify", Params, Objects, StateServerPid) ->
     end,
     ModifiedObject = plObject:execute(CurrentObject, {erlang:list_to_atom(Cmd), Value}),
     plObject:store(ModifiedObject, Objects);
-execute_command("delete", Params, Objects, StateServerPid) ->
+execute_command("delete", Params, Objects, _StateServerPid) ->
     {ok, Oid} = plMessage:json_get_value([oid], Params),
     plObject:delete(Oid, Objects).
 

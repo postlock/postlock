@@ -126,7 +126,7 @@ handle_cast(Msg, State) ->
 handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
-            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
+                State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
     end,
     {noreply, State};
 handle_info(_Info, State) ->
