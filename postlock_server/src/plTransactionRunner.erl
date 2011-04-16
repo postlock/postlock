@@ -51,5 +51,8 @@ execute_command("modify", Params, Objects, StateServerPid) ->
         false -> gen_server:call(StateServerPid, {get_object, Oid})
     end,
     ModifiedObject = plObject:execute(CurrentObject, {erlang:list_to_atom(Cmd), Value}),
-    plObject:store(ModifiedObject, Objects).
+    plObject:store(ModifiedObject, Objects);
+execute_command("delete", Params, Objects, StateServerPid) ->
+    {ok, Oid} = plMessage:json_get_value([oid], Params),
+    plObject:delete(Oid, Objects).
 
