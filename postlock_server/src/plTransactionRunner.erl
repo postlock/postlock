@@ -31,29 +31,24 @@ process_transaction(T, StateServerPid) ->
 
 process_command(Command, {Objects, StateServerPid}) ->
     {ok, Cmd} = plMessage:json_get_value([cmd], Command),
-    {ok, Params} = plMessage:json_get_value([params], Command),
-    {execute_command(Cmd, Params, Objects, StateServerPid), StateServerPid}.
+    {ok, Oid} = plMessage:json_get_value([oid], Command),
+    {ok, {array, Params}} = plMessage:json_get_value([params], Command),
+    {execute_command(Cmd, Oid, Params, Objects, StateServerPid), StateServerPid}.
 
-execute_command("create", Params, Objects, _StateServerPid) ->
-    {ok, Type} = plMessage:json_get_value([type], Params),
-    {ok, Oid} = plMessage:json_get_value([oid], Params),
+execute_command("create", Oid, _Params=[Type|_], Objects, _StateServerPid) ->
     case Type of
         "data" -> Obj = plObject:new_obj(plTypeData, Oid);
         "dict" -> Obj = plObject:new_obj(plTypeDict, Oid);
         "list" -> Obj = plObject:new_obj(plTypeList, Oid)
     end,
     plObject:store(Obj, Objects);
-execute_command("modify", Params, Objects, StateServerPid) ->
-    {ok, Oid} = plMessage:json_get_value([oid], Params),
-    {ok, Cmd} = plMessage:json_get_value([cmd], Params),
-    {ok, Value} = plMessage:json_get_value([value], Params),
+execute_command("delete", Oid, _Params, Objects, _StateServerPid) ->
+    plObject:delete(Oid, Objects);
+execute_command(Cmd, Oid, Params, Objects, StateServerPid) ->
     CurrentObject = case plObject:is_set(Oid, Objects) of
         true -> plObject:get_object(Oid, Objects);
         false -> gen_server:call(StateServerPid, {get_object, Oid})
     end,
-    ModifiedObject = plObject:execute(CurrentObject, {erlang:list_to_atom(Cmd), Value}),
-    plObject:store(ModifiedObject, Objects);
-execute_command("delete", Params, Objects, _StateServerPid) ->
-    {ok, Oid} = plMessage:json_get_value([oid], Params),
-    plObject:delete(Oid, Objects).
+    ModifiedObject = plObject:execute(CurrentObject, {erlang:list_to_atom(Cmd), Params}),
+    plObject:store(ModifiedObject, Objects).
 

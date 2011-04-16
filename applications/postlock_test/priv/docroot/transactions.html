@@ -26,45 +26,33 @@ module("transactions");
                     ops: [
                         {
                             cmd: "create",
-                            params: {
-                                type: "data",
-                                oid: participant_id + "_0"
-                            }
+                            oid: participant_id + "_0",
+                            params: ["data"]
                         },
                         {
                             cmd: "create",
-                            params: {
-                                type: "dict",
-                                oid: participant_id + "_1"
-                            }
+                            oid: participant_id + "_1",
+                            params: ["dict"]
                         },
                         {
                             cmd: "create",
-                            params: {
-                                type: "list",
-                                oid: participant_id + "_2"
-                            }
+                            oid: participant_id + "_2",
+                            params: ["list"]
                         },
                         {
                             cmd: "create",
-                            params: {
-                                type: "data",
-                                oid: participant_id + "_3"
-                            }
+                            oid: participant_id + "_3",
+                           params: ["data"]
                         },
                         {
-                            cmd: "modify",
-                            params: {
-                                oid: participant_id + "_0",
-                                cmd: "set",
-                                value: "juhu"
-                            }
+                            cmd: "set",
+                            oid: participant_id + "_0",
+                            params: ["juhu"]
                         },
                         {
                             cmd: "delete",
-                            params: {
-                                oid: participant_id + "_2"
-                            }
+                            oid: participant_id + "_2",
+                            params: []
                         }
                     ]
                 }
@@ -74,12 +62,9 @@ module("transactions");
                     base_state: 0,
                     ops: [
                         {
-                            cmd: "modify",
-                            params: {
-                                oid: participant_id + "_3",
-                                cmd: "set",
-                                value: "jahu"
-                            }
+                            cmd: "set",
+                            oid: participant_id + "_3",
+                            params: ["jahu"]
                         }
                     ]
                 }
