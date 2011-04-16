@@ -17,16 +17,16 @@ new_obj(Oid) ->
 get_oid({Oid, _}) ->
     Oid.
 
-execute({set, [Value]}, {Oid, _OldVal}) ->
+execute({set, Value}, {Oid, _OldVal}) ->
     {Oid, Value};
-execute({unsafe_set, [Value]}, Obj) ->
-    execute({set, [Value]}, Obj).
+execute({unsafe_set, Value}, Obj) ->
+    execute({set, Value}, Obj).
 
-xform({set, [Value1]}, {set, _Value2}) -> 
-    {fail, {set, [Value1]}, nop};
-xform({unsafe_set, [Value1]}, {set, [Value2]}) -> 
-    xform({set, [Value1]}, {set, [Value2]});
-xform({set, [_Value1]}, {unsafe_set, [Value2]}) ->
-    {ok, nop, {set, [Value2]}};
-xform({unsafe_set, [Value1]}, {unsafe_set, [Value2]}) ->
-    xform({set, [Value1]}, {unsafe_set, [Value2]}).
+xform({set, Value1}, {set, _Value2}) -> 
+    {fail, {set, Value1}, nop};
+xform({unsafe_set, Value1}, {set, Value2}) -> 
+    xform({set, Value1}, {set, Value2});
+xform({set, _Value1}, {unsafe_set, Value2}) ->
+    {ok, nop, {set, Value2}};
+xform({unsafe_set, Value1}, {unsafe_set, Value2}) ->
+    xform({set, Value1}, {unsafe_set, Value2}).

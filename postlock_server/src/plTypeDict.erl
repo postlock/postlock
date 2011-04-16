@@ -19,10 +19,10 @@ execute({set, Key, Value}, {Oid, Dict}) ->
     {Oid, dict:store(Key, Value, Dict)};
 execute({unsafe_set, Key, Value}, Obj) ->
     execute({set, Key, Value}, Obj);
-execute({remove, Key, Value}, {Oid, Dict}) ->
-    {Oid, dict:erase(Key, Value, Dict)};
-execute({unsafe_remove, Key, Value}, Obj) ->
-    execute({remove, Key, Value}, Obj).
+execute({remove, Key}, {Oid, Dict}) ->
+    {Oid, dict:erase(Key, Dict)};
+execute({unsafe_remove, Key}, Obj) ->
+    execute({remove, Key}, Obj).
 
 xform({set, Key, Value1}, {set, Key, _Value2}) ->
     {fail, {set, Key, Value1}, nop};
