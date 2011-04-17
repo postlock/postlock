@@ -13,14 +13,28 @@
 <script type="text/javascript" src="testlib.js"></script>
 <script type="text/javascript">
 $(document).ready(function(){
+    module("transactions");
+    clients = connect_clients({
+        url: get_backend_url(),
+        users: [
+            {username: "test_username_0", password: "test_password_0"},
+            {username: "test_username_1", password: "test_password_1"}
+        ],
+        on_all_connected: function() {
+            start();
+            run_tests();
+        },
+        on_failure: function() {
+            console.log("connection failure");
+        }
+    });
 
-module("transactions");
-
-    // Two clients connect to the session. One issues a transaction.
-    // We test what both of them receive from the server
-    // as a result.
-    test("message delivery", function() {
-        var mk_transaction = function(participant_id) {
+    run_tests = function() {
+        // Two clients connect to the session. One issues a transaction.
+        // We test what both of them receive from the server
+        // as a result.
+        test("message delivery", function() {
+            var mk_transaction = function(participant_id) {
                 return {
                     base_state: 0,
                     ops: [
@@ -28,70 +42,11 @@ module("transactions");
                             cmd: "create",
                             oid: participant_id + "_0",
                             params: ["data"]
-                        },
-                        {
-                            cmd: "create",
-                            oid: participant_id + "_1",
-                            params: ["dict"]
-                        },
-                        {
-                            cmd: "create",
-                            oid: participant_id + "_2",
-                            params: ["list"]
-                        },
-                        {
-                            cmd: "create",
-                            oid: participant_id + "_3",
-                            params: ["data"]
-                        },
-                        {
-                            cmd: "set",
-                            oid: participant_id + "_0",
-                            params: ["juhu"]
-                        },
-                        {
-                            cmd: "delete",
-                            oid: participant_id + "_2",
-                            params: []
                         }
                     ]
                 }
             },
-            var mk_transaction_2 = function(participant_id) {
-                return {
-                    base_state: 0,
-                    ops: [
-                        {
-                            cmd: "set",
-                            oid: participant_id + "_3",
-                            params: ["jahu"]
-                        }
-                    ]
-                }
-            },
-            clients = connect_clients({
-                url: get_backend_url(),
-                users: [
-                    {username: "test_username_0", password: "test_password_0"},
-                    {username: "test_username_1", password: "test_password_1"}
-                ],
-                on_all_connected: function() {
-                    clients[0].postlock.send({
-                        to: 1, // currently hardcoded participant id for state server
-                        type: 'transaction',
-                        body: mk_transaction(clients[0].postlock.participant_id())
-                    });
-                    clients[0].postlock.send({
-                        to: 1, // currently hardcoded participant id for state server
-                        type: 'transaction',
-                        body: mk_transaction_2(clients[0].postlock.participant_id())
-                    });
-                },
-                on_failure: function() {
-                    console.log("connection failure");
-                    start();
-                }
-            }),
+
             test_messages = function() {
                 // clients 0 and 1 should get the same thing from the server:
                 var sent_transaction = mk_transaction(clients[0].postlock.participant_id());
@@ -103,20 +58,31 @@ module("transactions");
                     "Client 1 got expected message from server");
                 start();
             };
-        $(clients).each(function(ix) {
-            var client = this;
-            client.received = null;
-            client.postlock.set_cb(
-               'participant_message', function(msg) {
-                   var i=0, result = true;
-                   client.received = msg.body;
-                   for (;i < clients.length;i++) result = result && clients[i].received !== null;
-                   if (result) test_messages();
-               });
-       });
-       expect(clients.length);
-       stop();
-    });
+
+            $(clients).each(function(ix) {
+                var client = this;
+                client.received = null;
+                client.postlock.set_cb(
+                   'participant_message', function(msg) {
+                       var i=0, result = true;
+                       client.received = msg.body;
+                       for (;i < clients.length;i++) result = result && clients[i].received !== null;
+                       if (result) test_messages();
+                   });
+            });
+            clients[0].postlock.send({
+                to: 1, // currently hardcoded participant id for state server
+                type: 'transaction',
+                body: mk_transaction(clients[0].postlock.participant_id())
+            });
+            expect(clients.length);
+            stop();
+        });
+
+        test("transaction result", function() {
+            
+        });
+    }; // run_tests
 }); // ready()
 </script>
 </head>

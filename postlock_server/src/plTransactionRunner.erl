@@ -15,7 +15,7 @@ init(StateServerPid) ->
 listen_loop(StateServerPid) ->
     receive
         {transaction, T} ->
-            {Result, _pid} = process_transaction(T, StateServerPid),
+            Result = process_transaction(T, StateServerPid),
             % returns the result of the transaction to state server
             gen_server:cast(StateServerPid, {transaction_result, Result}),
             listen_loop(StateServerPid);
@@ -27,7 +27,8 @@ listen_loop(StateServerPid) ->
 % TODO: error handling
 process_transaction(T, StateServerPid) ->
     {ok, {array, Commands}} = plMessage:json_get_value([ops], T),
-    lists:foldl(fun process_command/2, {plObject:new_state(plStorageTerm), StateServerPid}, Commands).
+    {Result, _Pid} = lists:foldl(fun process_command/2, {plObject:new_state(plStorageTerm), StateServerPid}, Commands),
+    {Result, T}.
 
 process_command(Command, {Objects, StateServerPid}) ->
     {ok, Cmd} = plMessage:json_get_value([cmd], Command),
