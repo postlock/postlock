@@ -39,6 +39,12 @@ $(document).ready(function(){
         }
     });
 
+    reset_received = function() {
+        $(clients).each(function(ix) {
+            this.received = [];
+        });
+    };
+
     run_tests = function() {
         // Two clients connect to the session. One issues a transaction.
         // We test what both of them receive from the server
@@ -62,23 +68,20 @@ $(document).ready(function(){
                 var sent_transaction = mk_transaction(clients[0].postlock.participant_id());
                 // set 'in_response_to' field.
                 //sent_transaction['in_response_to'] = "0.0";
-                deepEqual(clients[0].received, sent_transaction, 
+                deepEqual(clients[0].received[0], sent_transaction, 
                     "Client 0 got expected message from server");
-                deepEqual(clients[1].received, sent_transaction, 
+                deepEqual(clients[1].received[0], sent_transaction, 
                     "Client 1 got expected message from server");
                 start();
             };
 
-            $(clients).each(function(ix) {
-                var client = this;
-                client.received = null;
-                participant_message_cb = function(client, msg) {
-                    var i=0, result = true;
-                    client.received = msg.body;
-                    for (;i < clients.length;i++) result = result && clients[i].received !== null;
-                    if (result) test_messages();
-                };
-            });
+            reset_received();
+            participant_message_cb = function(client, msg) {
+                var i=0, result = true;
+                client.received.push(msg.body);
+                for (;i < clients.length;i++) result = result && clients[i].received.length == 1;
+                if (result) test_messages();
+            };
             clients[0].postlock.send({
                 to: 1, // currently hardcoded participant id for state server
                 type: 'transaction',
@@ -89,7 +92,80 @@ $(document).ready(function(){
         });
 
         test("transaction result", function() {
-            
+            var transaction_1 = {
+                base_state: 0,
+                ops: [
+                    {
+                        cmd: "create",
+                        oid: "oid_0",
+                        params: ["data"]
+                    },
+                    {
+                        cmd: "create",
+                        oid: "oid_1",
+                        params: ["dict"]
+                    },
+                    {
+                        cmd: "create",
+                        oid: "oid_2",
+                        params: ["list"]
+                    },
+                    {
+                        cmd: "create",
+                        oid: "oid_3",
+                        params: ["data"]
+                    },
+                    {
+                        cmd: "set",
+                        oid: "oid_0",
+                        params: ["juhu"]
+                    },
+                    {
+                        cmd: "delete",
+                        oid: "oid_2",
+                        params: []
+                    }
+                ]
+            };
+
+            var transaction_2 = {
+                base_state: 0,
+                ops: [
+                    {
+                        cmd: "set",
+                        oid: "oid_3",
+                        params: ["jahu"]
+                    }
+                ]
+            };
+
+            test_messages = function() {
+                deepEqual(clients[0].received[0], transaction_1);
+                deepEqual(clients[0].received[1], transaction_2);
+                deepEqual(clients[1].received[0], transaction_1);
+                deepEqual(clients[1].received[1], transaction_2);
+                start();
+            };
+
+            reset_received();
+            participant_message_cb = function(client, msg) {
+                var i=0, result = true;
+                client.received.push(msg.body);
+                for (;i < clients.length;i++) result = result && clients[i].received.length == 2;
+                if (result) test_messages();
+            };
+            clients[0].postlock.send({
+                to: 1, // currently hardcoded participant id for state server
+                type: 'transaction',
+                body: transaction_1
+            });
+            clients[0].postlock.send({
+                to: 1, // currently hardcoded participant id for state server
+                type: 'transaction',
+                body: transaction_2
+            });
+            expect(clients.length*2);
+            stop();
         });
     }; // run_tests
 }); // ready()
