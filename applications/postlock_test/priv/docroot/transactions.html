@@ -14,6 +14,10 @@
 <script type="text/javascript">
 $(document).ready(function(){
     module("transactions");
+
+    null_cb = function(client, msg) {};
+    participant_message_cb = null_cb;
+
     clients = connect_clients({
         url: get_backend_url(),
         users: [
@@ -21,6 +25,12 @@ $(document).ready(function(){
             {username: "test_username_1", password: "test_password_1"}
         ],
         on_all_connected: function() {
+            $(clients).each(function(ix) {
+                var client = this;
+                client.postlock.set_cb('participant_message', function(msg) {
+                    participant_message_cb(client, msg);
+                });
+            });
             start();
             run_tests();
         },
@@ -62,13 +72,12 @@ $(document).ready(function(){
             $(clients).each(function(ix) {
                 var client = this;
                 client.received = null;
-                client.postlock.set_cb(
-                   'participant_message', function(msg) {
-                       var i=0, result = true;
-                       client.received = msg.body;
-                       for (;i < clients.length;i++) result = result && clients[i].received !== null;
-                       if (result) test_messages();
-                   });
+                participant_message_cb = function(client, msg) {
+                    var i=0, result = true;
+                    client.received = msg.body;
+                    for (;i < clients.length;i++) result = result && clients[i].received !== null;
+                    if (result) test_messages();
+                };
             });
             clients[0].postlock.send({
                 to: 1, // currently hardcoded participant id for state server
