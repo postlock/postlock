@@ -98,21 +98,22 @@ handle_call(Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast({transaction_result, {plStorageTerm, Storage}}, State) ->
     Iter = plStorageTerm:iterator(Storage),
-    State1 = merge_transaction_result(plStorageTerm:next(Iter), State),
-    
-    gen_server:cast(State1#state.session_server, {deliver_message, #pl_client_msg{
+    {Ops, NewState} = merge_transaction_result(plStorageTerm:next(Iter), [], State),
+    MessageBody = json:obj_store("ops", {array, lists:foldl(fun (Op, Acc) -> Acc ++ [json:obj_from_list(Op)] end, [], Ops)} , json:obj_new()),
+
+    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=2,
         type="participant_message",
-        body=[]
+        body=MessageBody
     }}),
-    gen_server:cast(State1#state.session_server, {deliver_message, #pl_client_msg{
+    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
         from=1,
         to=3,
         type="participant_message",
-        body=[]
+        body=MessageBody
     }}),
-    {noreply, State1};
+    {noreply, NewState};
 handle_cast(Msg, State) ->
     io:format("plState:handle_cast got ~p~n",[Msg]),
     {noreply, State}.
@@ -126,7 +127,7 @@ handle_cast(Msg, State) ->
 handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
-                State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
+            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
     end,
     {noreply, State};
 handle_info(_Info, State) ->
@@ -189,12 +190,20 @@ get_object(SessionId, Oid) ->
 drop_tables(SessionId) ->
     [mnesia:delete_table(T) || T <- sessionid_to_tablenames(SessionId)].
 
-merge_transaction_result(none, State) -> State;
-merge_transaction_result({Oid, Obj, Action, Iter}, State) ->
-    case Action of
-        store -> plObject:store(Obj, State#state.storage);
-        delete -> plObject:delete(Oid, State#state.storage);
-        none -> ok
+merge_transaction_result(none, Ops, State) -> {Ops, State};
+merge_transaction_result({Oid, Obj, Action, Iter}, Ops, State) ->
+    NewOps = case Action of
+        store ->
+            plObject:store(Obj, State#state.storage),
+            Op = [{cmd, "store"}, {oid, Oid}, {value, "kiskutya"}],
+            Ops ++ [Op];
+            
+        delete ->
+            plObject:delete(Oid, State#state.storage),
+            Op = [{cmd, "delete"}, {oid, Oid}],
+            Ops ++ [Op];
+        none ->
+            Ops
     end,
     Next = plStorageTerm:next(Iter),
-    merge_transaction_result(Next, State).
+    merge_transaction_result(Next, NewOps, State).

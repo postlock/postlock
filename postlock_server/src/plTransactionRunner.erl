@@ -49,7 +49,7 @@ execute_command(Cmd, Oid, Params, Objects, StateServerPid) ->
         true -> plObject:get_object(Oid, Objects);
         false -> gen_server:call(StateServerPid, {get_object, Oid})
     end,
-    ExecuteParams = lists:foldl(fun (Param, Acc) -> lists:append(Acc, [Param]) end, [erlang:list_to_atom(Cmd)], Params),
-    ModifiedObject = plObject:execute(CurrentObject, erlang:list_to_tuple(ExecuteParams)),
+    ExecuteParams = lists:foldl(fun (Param, Acc) -> erlang:append_element(Acc, Param) end, {erlang:list_to_atom(Cmd)}, Params),
+    ModifiedObject = plObject:execute(CurrentObject, ExecuteParams),
     plObject:store(ModifiedObject, Objects).
 
