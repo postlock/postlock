@@ -49,14 +49,13 @@
     meta                    % stuff like timestamps
 }).
 
--record(postlock_transformation, {
+-record(postlock_operation, {
     id,                     % integer (key)
     transaction_id,         % id of transaction which this
                             % transformation belongs to
     oid,                    % 
     cmd,                    % command of transformation
-    parameters,             % parameters to the command
-    undo_data               % data needed to undo transformation
+    params                 % parameters to the command
 }).
 
 
