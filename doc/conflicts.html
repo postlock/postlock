@@ -21,23 +21,6 @@ number of modifications made since the common state (since it's possible to run 
 <dt>postlock server</dt><dd>The message passing and state synchronization part of postlock. Participants which run on the server (eg. php bridge) are not considered part of the postlock server.</dd>
 </dl>
 <p>
-<h2>Scope of this document</h2>
-Postlock participants (both client and server) maintain their own copy of shared state, allowing them to perform any operation locally.
-This allows developers to create extremely responsive collaborative applications and frees them from the burden of locking
-shared objects. Since each participant can perform any operation independently, their copies of shared state will gradually diverge 
-until the next synchronization with the server. This document describes the synchronization mechanizm which guarantees that the local
-state of each client follows the state of the postlock server. In a nutshell, the protocol has the following steps:
-<ol>
-<li>Participant A makes a local modification, and sends this modification to the state server as a transaction.</li>
-<li>Any number of participants may send modifications to the server which are executed before A's message.</li>
-<li>After receiving A's message, the server transforms it to take into account all the other transactions processed in step 2</li>
-<li>The server sends A the result of its transaction along with any modifications committed by other participants in step 2. If A's transaction was successfully applied then the other participants also receive A's transaction.</li>
-</ol>
-<br />
-Note that it is possible to simply poll the postlock state server for the value of an object so keeping a local copy of state is not 
-mandatory. This functionality is useful for building interfaces to languages with request-based execution models (eg. php) but normal
-participants have much to loose by taking this route.<br />
-</p>
 <h2>Synchronization examples</h2>
 The following examples aim to give the reader an understanding of the steps taken during synchronization, and what messages are exchanged
 between participants.

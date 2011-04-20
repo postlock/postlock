@@ -1,11 +1,63 @@
 <html>
-<head>
-<title>Transactions in postlock</title>
-</head>
-<body>
-<h1>Transactions in postlock</h1>
-<h2>Terms used in this document</h2>
-This document relies on terms introduced in <a href="conflicts.html">conflicts.html</a>.<br />
+    <head>
+        <title>Transactions in postlock</title>
+    </head>
+    <body>
+        <h1>Introduction</h1>
+        <h2>About postlock</h2>
+        <p>Postlock is a system allowing multiple processes running on different computers to access a globally shared state space without the need to explicitly lock objects or perform low-level synchronization. Postlock has an optimisitic concurrency model, meaning each client can modify the shared state without consulting other clients or the server.</p> 
+        <p>Each client maintains their own copy of the global state. Clients must apply changes to their local copy
+        first. Once the local modification is complete, the changes are sent to the postlock server which broadcasts the changes to all clients, effectively making the local changes global.</p>
+        <h2>What are transactions</h2>
+        <p>Changes to global state are expressed as operations on data structures (an example would be
+        <code>insert</code> on a list). In order to avoid corruption of the global state, these operations are grouped
+        into transactions, which have traditional <a href="http://en.wikipedia.org/wiki/ACID">ACID properties</a>.
+        The server places all incoming transactions into a queue, and runs them one at a time. Each transaction may
+        succeed or fail depending on the current global state.
+        </p>
+        <p>
+        As each client may submit transactions at any point in time, it is possible that the data structures which a
+        given operation modifies have changed in the server's copy of state since the transaction was created. In that 
+        case, applying the deprecated transactions verbatim would not have the result which the client intended. This
+        problem can be solved by applying an <a href="http://en.wikipedia.org/wiki/Operational_Transform">Operational
+        Transform</a>(OT) to the out of date transaction and applying the result.
+        </p>
+        <h2>Related work</h2>
+        <p>The concurrency model used by postlock is influenced by the implementation used by <a
+        href="http://www.waveprotocol.org/whitepapers">google wave</a>. The fact that Wave was not a commerical success,
+        is not due to the underlying technology, which is quite solid. For a more detailed explanation about how Wave
+        uses OT, <a
+        href="http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation">check out this
+        article</a>. The field of OT is quite mature, preceding wave by more than a decade. The most important
+        publication in the discipline from Postlock's point of view is <a href="http://doi.acm.org/10.1145/215585.215706">High-latency, low-bandwidth windowing in the Jupiter collaboration system</a>.
+        <h2>Scope of this document</h2>
+        <p>This document provides the "official" specification of the transaction protocol used by postlock to propagate
+        state change information between clients and the server. Both the syntax of transactional messages and the
+        semantics involved are addressed.</p>
+
+        <h1>Transaction message flow</h1>
+        <h1>Message syntax</h1>
+        <h1>OT</h1>
+
+
+        Postlock participants (both client and server) maintain their own copy of shared state, allowing them to perform any operation locally.  This allows developers to create extremely responsive collaborative applications and frees them from the burden of locking
+            shared objects. Since each participant can perform any operation independently, their copies of shared state will gradually diverge 
+            until the next synchronization with the server. This document describes the synchronization mechanizm which guarantees that the local
+            state of each client follows the state of the postlock server. In a nutshell, the protocol has the following steps:
+            <ol>
+            <li>Participant A makes a local modification, and sends this modification to the state server as a transaction.</li>
+            <li>Any number of participants may send modifications to the server which are executed before A's message.</li>
+            <li>After receiving A's message, the server transforms it to take into account all the other transactions processed in step 2</li>
+            <li>The server sends A the result of its transaction along with any modifications committed by other participants in step 2. If A's transaction was successfully applied then the other participants also receive A's transaction.</li>
+            </ol>
+            <br />
+            Note that it is possible to simply poll the postlock state server for the value of an object so keeping a local copy of state is not 
+            mandatory. This functionality is useful for building interfaces to languages with request-based execution models (eg. php) but normal
+            participants have much to loose by taking this route.
+        </p>
+
+        <h1>Transactions in postlock</h1>
+            <h2>Terms used in this document</h2>
 <dl>
 <dt>oid</dt><dd>Abbreviation of Object IDentity. A simple string with the format of "X.Y", where both X and Y are nonnegative integers. 
 X is the id of the participant which created the object, while Y is a counter. OID's are guaranteed to be unique. </dd>
