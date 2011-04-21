@@ -1,26 +1,92 @@
 <html>
     <head>
         <title>Transactions in postlock</title>
+        <style>
+            h1, h2 {border-bottom: 1px solid #CCC;}
+            a.toc_heading_1 { padding-left: 10px;font-size:18px;}
+            a.toc_heading_2 { padding-left: 20px;font-size:14px;}
+            a.toc_heading_3 { padding-left: 30px;font-size:12px;}
+            a.toc_heading_4 { padding-left: 40px;font-size:10px;}
+            div.toc {padding-top: 12px;padding-bottom: 12px;}
+            a.toc_numbering {color: #ccc;}
+            dt {font-weight: bold;}
+            dd {font-style: italic; border-left: 2px solid #ccc; padding-left: 4px;}
+            p.h1, h1 {padding-left: 10px;}
+            p.h2, h2 {padding-left: 20px;}
+            p.h3, h3 {padding-left: 30px;}
+            p.h4, h4 {padding-left: 40px;}
+            pre {background-color: #eee; padding: 8px;}
+
+        </style>
+        <script type="text/javascript" src="jquery-1.5.2.js"></script>
+        <script type="text/javascript">
+            // based on http://www.jankoatwarpspeed.com/post/2009/08/20/Table-of-contents-using-jQuery.aspx
+            var generate_toc = function(spec) {
+                var my = {
+                    text: $(spec.text_container),
+                    toc: $(spec.toc_container || $(spec.text_container).children('div.toc')),
+                    add_numbering: spec.add_numbering===true,
+                    fun: {
+                        traverse: function() {
+                            var level = 1, counters = [0,0,0,0,0,0];
+                            my.text.children("h1, h2, h3, h4, h5, h6").each(function(heading_id) {
+                                var h = $(this), level = parseInt(h.attr('tagName').slice(1)), num, i, h_text = h.html();
+                                counters[level -1]++;
+                                for (i = level; i < counters.length; i++) counters[i] = 0;
+                                num = counters.slice(0,level).join('.');
+                                my.toc.append("<a href='#heading" + heading_id + "' class='toc_heading_" + level + "'>" + num + ' ' + h_text + "</a><br />");
+                                if (my.add_numbering) h.html('<a class="toc_numbering" name="heading'+heading_id+'">' + num + '</a>' + ' ' + h_text);
+                                if (h.next()[0] && h.next()[0].tagName.toUpperCase() === 'P') h.next().addClass('h'+level);
+                            });
+                        }
+                    }
+                };
+                if (my.toc && my.toc.length > 0) {
+                    my.fun.traverse();
+                }
+            };
+
+            $(document).ready(function() {
+                generate_toc({
+                    text_container: 'body',
+                    add_numbering: true
+                });
+            });
+        </script>
     </head>
     <body>
+        <b>Specification for transactions in postlock</b><br />
+        PLEASE UPDATE THIS DOCUMENT IF THERE ARE CHANGES IN THE PROTOCOL<br />
+        Author: Peter Neumark &lt;<i>neumark at postlock dot org</i>&gt;<br />
+        Last Modified: -<br />
+
+        <div class="toc"></div>
         <h1>Introduction</h1>
         <h2>About postlock</h2>
-        <p>Postlock is a system allowing multiple processes running on different computers to access a globally shared state space without the need to explicitly lock objects or perform low-level synchronization. Postlock has an optimisitic concurrency model, meaning each client can modify the shared state without consulting other clients or the server.</p> 
-        <p>Each client maintains their own copy of the global state. Clients must apply changes to their local copy
-        first. Once the local modification is complete, the changes are sent to the postlock server which broadcasts the changes to all clients, effectively making the local changes global.</p>
-        <h2>What are transactions</h2>
+        <p>Postlock is a system allowing processes running on different computers to access a globally shared state
+        space without the need to explicitly lock objects or perform low-level synchronization. Postlock has an
+        optimisitic concurrency model, meaning each client can modify the shared state without consulting with other
+        clients or the server.<br />
+        Each client maintains their own copy of the global state. Clients must apply changes to their local copy
+        first. Once the local modification is complete, the changes are sent to the postlock server which broadcasts the changes to all clients, effectively making the changes global.
+        </p>
+        <h2>Transactions</h2>
         <p>Changes to global state are expressed as operations on data structures (an example would be
         <code>insert</code> on a list). In order to avoid corruption of the global state, these operations are grouped
         into transactions, which have traditional <a href="http://en.wikipedia.org/wiki/ACID">ACID properties</a>.
         The server places all incoming transactions into a queue, and runs them one at a time. Each transaction may
         succeed or fail depending on the current global state.
         </p>
+        <h2>Operational transformations</h2>
         <p>
-        As each client may submit transactions at any point in time, it is possible that the data structures which a
-        given operation modifies have changed in the server's copy of state since the transaction was created. In that 
-        case, applying the deprecated transactions verbatim would not have the result which the client intended. This
-        problem can be solved by applying an <a href="http://en.wikipedia.org/wiki/Operational_Transform">Operational
-        Transform</a>(OT) to the out of date transaction and applying the result.
+        Each client may send the server a transaction at any point in time. Client A will perform some local operation
+        and send it to the server as a transaction. Simultaneously, Client B does the same. If B's transaction reaches
+        the server before A's, and both clients perform operations on the same part of the global state, it is possible
+        for A's transaction to be out of date. This means that applying A's transaction "as is" would yield a different
+        state for the server than client A's local state after the operation. In order to fix client A's out of date
+        transaction so its operations have the same result as they did for client A, 
+        an <a href="http://en.wikipedia.org/wiki/Operational_transformation">Operational
+        Transformation</a>(OT) must be applied to the operations within A's transaction.
         </p>
         <h2>Related work</h2>
         <p>The concurrency model used by postlock is influenced by the implementation used by <a
@@ -28,15 +94,199 @@
         is not due to the underlying technology, which is quite solid. For a more detailed explanation about how Wave
         uses OT, <a
         href="http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation">check out this
-        article</a>. The field of OT is quite mature, preceding wave by more than a decade. The most important
+        article</a>. The field of OT is quite mature, preceding Wave by more than a decade. The most important
         publication in the discipline from Postlock's point of view is <a href="http://doi.acm.org/10.1145/215585.215706">High-latency, low-bandwidth windowing in the Jupiter collaboration system</a>.
+        </p>
         <h2>Scope of this document</h2>
-        <p>This document provides the "official" specification of the transaction protocol used by postlock to propagate
-        state change information between clients and the server. Both the syntax of transactional messages and the
-        semantics involved are addressed.</p>
+        <p>This document describes the transaction protocol used by postlock to propagate
+        state change information between clients and the server. In particular, it addresses:
+            <ol>
+                <li>The semantics of transactions</li>
+                <li>The message format used to encode transactions</li>
+                <li>OT rules for the different data types used by postlock</li>
+                <li>Success scenarios</li>
+                <li>Failure scenarios</li>
+            </ol>
+        </p>
+        <h2>Definition of terms</h2>
+        <p>
+            The following terms have specific meaning within postlock:
+            <dl>
+                <dt>server state</dt>
+                    <dd>Like each client, the postlock server also has its own copy of global state. Each time the
+                    server applies a transaction, it reaches a new state. The different versions of ther server's state
+                    are identified by integers.</dd>
+                <dt>unacknowledged state</dt>
+                    <dd>After applying an operation, a client enters an unacknolwedged state. The client will remain in
+                    the unacknowledged state until it receives either positive or negative acknolwedgement from the
+                    server (after which it will enter a server state).</dd>
+                <dt>transaction</dt>
+                    <dd>A message with a pre-defined format containing a set of operations to be applied to a specific server state. If the receiver of the transaction
+                    is in a different state than the one the transaction was created for, then the receiver must perform
+                    OT to arrive at a transaction applicable in its current state.</dd>
+                <dt>participant</dt>
+                    <dd>A process connected to the postlock session which can exchange messages with the other participants.
+                    All postlock clients are participants. The state server is also a participant.</dd>
+            </dl>
+        </p>
 
-        <h1>Transaction message flow</h1>
-        <h1>Message syntax</h1>
+        <h1>Transaction semantics</h1>
+        <h2>ACID properties</h2>
+        <p>Transactions in postlock fulfill the ACID properties:
+        <table>
+            <tr><td>Atomicity</td><td>If any of the operations fail within a transaction, then the entire transaction is
+            discarded and global state is not modified.</td></tr>
+            <tr><td>Consistency</td><td>Postlock makes few guarantees about the contents of its data types, but they
+            are stricly enforced (eg. no dictionary may have two values attached to the same key).</td></tr>
+            <tr><td>Isolation</td><td>Transactions are executed serially, the success of a transaction depends only on
+            the current shared state.</td></tr>
+            <tr><td>Durability</td><td>Transactions are saved to Mnesia by postlock before they are executed, so
+            postlock has the same durability properties as mnesia.</td></tr>
+        </table>
+        </p>
+        <h2>How transactions work</h2>
+        <p>
+        To understand how transactions are created and executed, its useful to consider the entire chain of actions
+        taken to ensure that all clients arrive at the same shared state. Let's consider a case where we have two
+        clients, Alice and Bob, using an application which is built atop postlock:
+        <ol>
+            <li>Initially, the system is synchronized: each client is in the same state as the
+            server. We will call this "server state 1".</li>
+            <li>Alice clicks a button in the GUI of her postlock application.</li>
+            <li>The application requests a change in local state through the postlock client API.</li>
+            <li>The postlock client commits the operation locally and creates a transaction message which contains the
+            details of the operation as well as the last state the client shared with the server ("server state 1").
+            Alice's postlock client is now in "unacknowledged state 1".</li>
+            <li>The newly created transactions is placed in the outgoing queue. Since there are no transactions awaiting
+            acknowledgement, it is immediately sent to the state server, typically participant 1 in the postlock session.</li>
+            <li>The server checks whether or not it needs to apply OT to the transaction before executing it. Since the
+            transaction applies to "server state 1", which is the server's current state, it attempts to execute the
+            transaction as it was received.</li>
+            <li>The transaction is executed in a separate context so the server's state is not affected in the case of
+            failure. If the transaction is successfully executed, the modified objects are copied from the transaction's
+            context into the server's copy of global state, and the server's state is incremented to "server state 2".</li>
+            <li>The server broadcasts the transaction it has applied to the other participants in the session. A field
+            is added, which allows Alice's postlock client to identify the transaction as its own.</li>
+            <li>Alice's client changes its state to "server state 2", and empties the outgoing transaction queue.</li>
+            <li>Bob's client receives the transaction which will take its local copy of shared state to "server state
+            2"</li>
+            <li>Since Bob has no unacknowledged transactions, the transaction it received from the server can be applied
+            as-is.</li>
+            <li>After applying the transaction and modifying it's state revision to "server state 2", Bob's client calls
+            a callback function in the application code, notifying it of the fact that an object in the shared state has
+            been modified.</li>
+            <li>The application is notified through the callback to update the GUI, and Bob sees Alice's
+            modification</li>
+            </li>
+        </ol>
+        The end-to end propogation of state change in postlock takes lots of small steps. This document describes:
+        <ul>
+            <li>The format of the transaction message created in step 4.</li>
+            <li>The application of OT by the server in step 6.</li>
+            <li>In step 7, the possible reasons for failure of a transaction, and the resulting actions of the server.</li>
+            <li>The format of the server's outgoing transaction message in step 8, as well as the details of the
+            broadcasting mechanism.</li>
+            <li>The client's use of OT (would replace step 11 above).</li>
+        </ul>
+        </p>
+
+        <h1>Message format</h1>
+        <p>
+            Postlock uses the <a href="http://www.json.org/">JSON</a> representation of data internally. Work is ongoing to allow clients to use
+            other encodings (<a href="http://thrift.apache.org">thrift</a> for example). Still, the "official"
+            representation of postlock messages is JSON, and all other formats must have clearly defined transformations
+            which convert their data into JSON messages.
+        </p>
+        <h2>Postlock message</h2>
+        <p>
+            Transactions are standard postlock messages with the following format:
+            <pre>
+            {
+                id: /* integer - message id */,
+                from: /* integer - originating participant id */,
+                to: /* integer - destination participant id */,
+                type: 'transaction',
+                body: /* transaction object format, see below */
+            }
+            </pre>
+            Only the <code>body</code> field has a special format in transaction messages. The remaining fields are
+            populated the same way as for any other message. It is recommended to use "transaction" as the type of
+            transaction messages, but this is currently not enforced.<br />
+            The body field has the following format:
+            <pre>
+            {
+                in_response_to: /* string - optional - used for acknowledgment of transactions */,
+                state_version: /* integer - identifies a version of server state */,
+                ops: [ /* operation description */ ]
+            }
+            </pre>
+            The <code>in_response_to</code> field has the format "participant id.message id", for example "5.2". That
+            particular value indicates that the transaction encoded in the current message is actually the same
+            transaction as the one sent by participant 5 with message id 2. The in_response_to field is necessary
+            because the message sent by the server contains operations which have potentially been modified by OT. When
+            participant 5 receives this message, it will not execute the enclosed operations (even if they look
+            unfamiliar because of the OT), instead it will remove the transaction message with message id 2 from the
+            outgoing transaction queue, since it has been acknowledged by the server.<br />
+            The last field of the transaction body is a list of operation objects, which in turn have the following
+            format:
+            <pre>
+            {
+                oid: /* integer - optional - object id of subject of operation */
+                cmd: /* string - command to run on object */
+                params: [] /* arbitrary JSON data - optional */
+            }
+            </pre>
+            Each postlock data type has a set of operations which can be used to modify its state. Invoking such an
+            operation requires the oid field to be set and the cmd field to have the proper command name. The oid field
+            is marked optional because it is not required for creation/deletion of objects (in which case the oid of the
+            object will be in the params array).
+            </p>
+            <h3>Example postlock message</h3>
+            <p>
+            The acceptable list items in the params field depend on what type of command is executed. Typically, parameters
+            are simple integers and strings, but in theory they could be arbitrarily complex JSON expressions.<br />
+            The following example message is sent from a client to the state server and changes the contents of a data
+            object:
+            <pre>
+            {
+                id: 1,
+                from: 3,
+                to: 1,
+                type: 'transaction',
+                body: {
+                    state_version: 1,
+                    ops: [
+                        {
+                            oid: "0.0",
+                            cmd: "set",
+                            params: ["the new value"]
+                        }
+                    ]
+                }
+            }
+            </pre>
+            Assuming that the transaction was successfully executed, the server would broadcast the following message:
+            <pre>
+            {
+                id: 6,
+                from: 1,
+                to: 7,
+                type: 'transaction',
+                body: {
+                    in_response_to: "3.1",
+                    state_version: 1,
+                    ops: [
+                        {
+                            oid: "0.0",
+                            cmd: "set",
+                            params: ["the new value"]
+                        }
+                    ]
+                }
+            }
+            </pre>
+            The server's acknowledgement can have any message id &gt; the client's original message id.
+            </p>
         <h1>OT</h1>
 
 
