@@ -32,18 +32,21 @@ process_transaction(Transaction, StateServerPid) ->
 
 process_command(Command, {Objects, StateServerPid}) ->
     {ok, Cmd} = plMessage:json_get_value([cmd], Command),
-    {ok, Oid} = plMessage:json_get_value([oid], Command),
+    Oid = case plMessage:json_get_value([oid], Command) of
+        {ok, Value} -> Value;
+        _ -> undefined
+    end,
     {ok, {array, Params}} = plMessage:json_get_value([params], Command),
     {execute_command(Cmd, Oid, Params, Objects, StateServerPid), StateServerPid}.
 
-execute_command("create", Oid, _Params=[Type|_], Objects, _StateServerPid) ->
+execute_command("create", _, _Params=[Oid,Type|_], Objects, _StateServerPid) ->
     case Type of
         "data" -> Obj = plObject:new_obj(plTypeData, Oid);
         "dict" -> Obj = plObject:new_obj(plTypeDict, Oid);
         "list" -> Obj = plObject:new_obj(plTypeList, Oid)
     end,
     plObject:store(Obj, Objects);
-execute_command("delete", Oid, _Params, Objects, _StateServerPid) ->
+execute_command("delete", _, _Params=[Oid|_], Objects, _StateServerPid) ->
     plObject:delete(Oid, Objects);
 execute_command(Cmd, Oid, Params, Objects, StateServerPid) ->
     CurrentObject = case plObject:is_set(Oid, Objects) of

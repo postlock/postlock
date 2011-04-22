@@ -56,8 +56,7 @@ $(document).ready(function(){
                     ops: [
                         {
                             cmd: "create",
-                            oid: participant_id + "_0",
-                            params: ["data"]
+                            params: [participant_id + "_0", "data"]
                         }
                     ]
                 }
@@ -97,23 +96,19 @@ $(document).ready(function(){
                 ops: [
                     {
                         cmd: "create",
-                        oid: "oid_0",
-                        params: ["data"]
+                        params: ["oid_0", "data"]
                     },
                     {
                         cmd: "create",
-                        oid: "oid_1",
-                        params: ["dict"]
+                        params: ["oid_1", "dict"]
                     },
                     {
                         cmd: "create",
-                        oid: "oid_2",
-                        params: ["list"]
+                        params: ["oid_2", "list"]
                     },
                     {
                         cmd: "create",
-                        oid: "oid_3",
-                        params: ["data"]
+                        params: ["oid_3", "data"]
                     },
                     {
                         cmd: "set",
@@ -122,8 +117,7 @@ $(document).ready(function(){
                     },
                     {
                         cmd: "delete",
-                        oid: "oid_2",
-                        params: []
+                        params: ["oid_2"]
                     }
                 ]
             };
