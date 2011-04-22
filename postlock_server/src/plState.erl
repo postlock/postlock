@@ -95,8 +95,8 @@ handle_call(Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-handle_cast({transaction_result, {{plStorageTerm, Storage}, Transaction}}, State) ->
-    store_transaction(Transaction, State#state.sessionid),
+handle_cast({transaction_result, MsgId, Transaction, {plStorageTerm, Storage}}, State) ->
+    store_transaction(MsgId, Transaction, State#state.sessionid),
 
     Iter = plStorageTerm:iterator(Storage),
     NewState = merge_transaction_result(plStorageTerm:next(Iter), State),
@@ -127,7 +127,7 @@ handle_cast(Msg, State) ->
 handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
-            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
+            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.id, Msg#pl_client_msg.body}
     end,
     {noreply, State};
 handle_info(_Info, State) ->
@@ -167,11 +167,11 @@ create_trasaction_table(SessionId) ->
 drop_transaction_table(SessionId) ->
     mnesia:delete_table(transaction_table_name(SessionId)).
 
-store_transaction(Transaction, SessionId) ->
+store_transaction(MsgId, Transaction, SessionId) ->
     TransTable = transaction_table_name(SessionId),
     {ok, {array, Ops}} = plMessage:json_get_value([ops], Transaction),
     Row = #postlock_transaction{
-        id = {now(), node()},
+        id = MsgId,
         ops = Ops
     },
     mnesia:transaction(fun() ->

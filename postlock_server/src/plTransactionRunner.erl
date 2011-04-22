@@ -14,10 +14,10 @@ init(StateServerPid) ->
 
 listen_loop(StateServerPid) ->
     receive
-        {transaction, T} ->
-            Result = process_transaction(T, StateServerPid),
+        {transaction, MsgId, Transaction} ->
+            {ModifiedTransaction, ResultStorage} = process_transaction(Transaction, StateServerPid),
             % returns the result of the transaction to state server
-            gen_server:cast(StateServerPid, {transaction_result, Result}),
+            gen_server:cast(StateServerPid, {transaction_result, MsgId, ModifiedTransaction, ResultStorage}),
             listen_loop(StateServerPid);
         BadValue ->
             error_logger:error_report(["plTransactionRunner received unexpected message: ", BadValue]),
@@ -25,10 +25,10 @@ listen_loop(StateServerPid) ->
     end.
 
 % TODO: error handling
-process_transaction(T, StateServerPid) ->
-    {ok, {array, Commands}} = plMessage:json_get_value([ops], T),
+process_transaction(Transaction, StateServerPid) ->
+    {ok, {array, Commands}} = plMessage:json_get_value([ops], Transaction),
     {Result, _Pid} = lists:foldl(fun process_command/2, {plObject:new_state(plStorageTerm), StateServerPid}, Commands),
-    {Result, T}.
+    {Transaction, Result}.
 
 process_command(Command, {Objects, StateServerPid}) ->
     {ok, Cmd} = plMessage:json_get_value([cmd], Command),
