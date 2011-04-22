@@ -17,7 +17,7 @@
          terminate/2, code_change/3]).
 
 %% for development
--export([drop_tables/1]).
+-export([drop_transaction_table/1]).
 
 % Needed for default table attributes.
 -include("plRegistry.hrl").
@@ -56,7 +56,7 @@ start_link(ServerArgs) ->
 %%--------------------------------------------------------------------
 init([SessionServer, SessionId]) ->
     process_flag(trap_exit, true),
-    make_session_tables(SessionId), 
+    create_trasaction_table(SessionId), 
     TransactionRunner = spawn_link(plTransactionRunner, init, [self()]),
     Storage = plObject:new_state(plStorageEts),
     {ok, #state{
@@ -154,45 +154,29 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-sessionid_to_tablenames(SessionId) ->
-    [
-    erlang:list_to_atom("pl_transactions_" ++ erlang:integer_to_list(SessionId)),
-    erlang:list_to_atom("pl_operations_" ++ erlang:integer_to_list(SessionId))
-    ].
+transaction_table_name(SessionId) ->
+    erlang:list_to_atom("pl_transactions_" ++ erlang:integer_to_list(SessionId)).
 
-make_session_tables(SessionId) ->
-    [TransTable, OpsTable] = sessionid_to_tablenames(SessionId),
+create_trasaction_table(SessionId) ->
+    TransTable = transaction_table_name(SessionId),
     mnesia:create_table(TransTable, 
         [{record_name, postlock_transaction} | [{attributes, record_info(fields, postlock_transaction)}|
         ?POSTLOCK_DEFAULT_TABLE_ARGS]]),
-        mnesia:create_table(OpsTable, 
-        [{record_name, postlock_operation} | [{attributes, record_info(fields, postlock_operation)}|
-        ?POSTLOCK_DEFAULT_TABLE_ARGS]]),
     error_logger:info_report(["Tables created successfully for session", SessionId]).
 
-drop_tables(SessionId) ->
-    [mnesia:delete_table(T) || T <- sessionid_to_tablenames(SessionId)].
+drop_transaction_table(SessionId) ->
+    mnesia:delete_table(transaction_table_name(SessionId)).
 
 store_transaction(Transaction, SessionId) ->
-    [_TransTable, OpsTable] = sessionid_to_tablenames(SessionId),
+    TransTable = transaction_table_name(SessionId),
     {ok, {array, Ops}} = plMessage:json_get_value([ops], Transaction),
-    TransactionId = 1,
-    Rows = [format_operation(Op, TransactionId) || Op <- Ops],
-    mnesia:transaction(fun() ->
-        [mnesia:write(OpsTable, Row, write) || Row <- Rows]
-    end).
-
-format_operation(Op, TransactionId) ->
-    {ok, Oid} = plMessage:json_get_value([oid], Op),
-    {ok, Cmd} = plMessage:json_get_value([cmd], Op),
-    {ok, {array, Params}} = plMessage:json_get_value([params], Op),
-    #postlock_operation{
+    Row = #postlock_transaction{
         id = {now(), node()},
-        transaction_id = TransactionId,
-        oid = Oid,
-        cmd = Cmd,
-        params = Params
-    }.
+        ops = Ops
+    },
+    mnesia:transaction(fun() ->
+        mnesia:write(TransTable, Row, write)
+    end).
 
 merge_transaction_result(none, State) -> State;
 merge_transaction_result({Oid, Obj, Action, Iter}, State) ->
