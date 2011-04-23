@@ -14,10 +14,10 @@ init(StateServerPid) ->
 
 listen_loop(StateServerPid) ->
     receive
-        {transaction, MsgId, Transaction} ->
+        {transaction, Transaction} ->
             {ModifiedTransaction, ResultStorage} = process_transaction(Transaction, StateServerPid),
             % returns the result of the transaction to state server
-            gen_server:cast(StateServerPid, {transaction_result, MsgId, ModifiedTransaction, ResultStorage}),
+            gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage}),
             listen_loop(StateServerPid);
         BadValue ->
             error_logger:error_report(["plTransactionRunner received unexpected message: ", BadValue]),

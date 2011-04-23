@@ -30,7 +30,8 @@
     session_server,
     sessionid,
     transaction_runner,
-    storage
+    storage,
+    last_msg_id
 }).
 
 %%====================================================================
@@ -63,7 +64,8 @@ init([SessionServer, SessionId]) ->
         session_server = SessionServer,
         sessionid = SessionId,
         transaction_runner = TransactionRunner,
-        storage = Storage
+        storage = Storage,
+        last_msg_id = 0
     }}.
 
 %%--------------------------------------------------------------------
@@ -95,25 +97,28 @@ handle_call(Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-handle_cast({transaction_result, MsgId, Transaction, {plStorageTerm, Storage}}, State) ->
-    store_transaction(MsgId, Transaction, State#state.sessionid),
+handle_cast({transaction_result, Transaction, {plStorageTerm, Storage}}, State) ->
+    MsgId = State#state.last_msg_id + 1,
+    State1 = State#state{last_msg_id = MsgId},
+    store_transaction(MsgId, Transaction, State1#state.sessionid),
 
     Iter = plStorageTerm:iterator(Storage),
-    NewState = merge_transaction_result(plStorageTerm:next(Iter), State),
+    State2 = merge_transaction_result(plStorageTerm:next(Iter), State1),
 
-    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
-        from=1,
-        to=2,
-        type="participant_message",
-        body=Transaction
+    gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
+        id = MsgId,
+        from = 1,
+        to = 2,
+        type = "participant_message", % TODO: transaction
+        body = Transaction
     }}),
-    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
-        from=1,
-        to=3,
-        type="participant_message",
-        body=Transaction
+    gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
+        from = 1,
+        to = 3,
+        type = "participant_message",
+        body = Transaction
     }}),
-    {noreply, NewState};
+    {noreply, State2};
 handle_cast(Msg, State) ->
     io:format("plState:handle_cast got ~p~n",[Msg]),
     {noreply, State}.
@@ -127,7 +132,7 @@ handle_cast(Msg, State) ->
 handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
-            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.id, Msg#pl_client_msg.body}
+            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
     end,
     {noreply, State};
 handle_info(_Info, State) ->
