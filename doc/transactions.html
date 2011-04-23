@@ -199,7 +199,7 @@
         </p>
         <h2>Postlock message</h2>
         <p>
-            Transactions are standard postlock messages with the following format:
+            Transactions are standard postlock messages, and as such have the following format:
             <pre>
             {
                 id: /* integer - message id */,
@@ -291,8 +291,46 @@
             acknolwedgement are identical to the original transaction, but due to the use of OT by the server, this is
             not always the case.
             </p>
-        <h1>OT</h1>
-        <p><i>STUB</i></p>
+        <h1>Operational Transformation</h1>
+        <p>
+            Operations are applicable to a certain version of state. For example, <code>list.remove(1)</code> will
+            no longer delete the same item from the list if it is preceded by a <code>list.insert(0, X)</code>. The
+            Operational Transformation (OT) maps operations applicable in a given state to a different state in such a
+            way that they still yield the same result.<br />
+            Since each client maintains its own copy of shared state, clients will sometimes be in a different state
+            than the server. Specifically, clients can be:
+            <ol>
+                <li><i>In a latter state than the state server</i> when the local client applies a user-initiated modification
+                from the application on top of postlock through the client API. It sends the local modifications to the
+                server in a transaction message. The server then broadcasts the acknowledgement of the transaction if it
+                is successful, or returns an error message on failure. Once the client receives the server's response,
+                it will again be in the same state as the server: if the transaction succeeded, then it will be in the
+                next server state. Otherwise, it will roll back to the previous server state (undoing the user
+                modification).</li>
+                <li><i>In an earlier state than the state server</i> when the local client has not yet applied all of
+                the transactions broadcast by the server. Once the client "catches up", it will again be in a server
+                state.</li>
+            </ol>
+            In practice, clients are often both before <i>and</i> after the server state in the sense that they have
+            unacknowledged local modifications and have not yet applied every transaction broadcast by the server.
+            OT is needed any time a client or the server receives a transaction message which is based off a different
+            state than what the recipient is in.
+            The <i>how transactions work</i> section includes two places where OT may be necessary. There are actually
+            three:
+            <ul>
+            <li>Upon receiving a server transaction, clients which have unacknolwedged local modifications must reverse
+            these local operations with OT to recreate the server state in which the transaction can be applied.</li>
+            <li>Upon receiving a client transaction which applies to a previous server state than the current one, the
+            state server uses OT to make the client's out of date transaction applicable in the current state.</li>
+            <li>If the postlock client receives a sequence of modification requests from the application, then they are
+            all applied locally, but only the first change is sent to the server as a transaction message. The remaining
+            change operations are inserted into the outgoing queue. They will be sent to the server once the previous
+            transactions have been acknowledged (there can be only one transaction waiting for acknowledgement from the
+            server). Since all transactions must have a <code>state_version</code> which refers to a server state, OT
+            must be applied to the pending changes so they can be applied to a server state. Without the operational
+            transformation, they could be applied to the client's unacknowledged state only.</li>
+            </ul>
+        </p>
 
         <h1>How the postlock server broadcasts messages</h1>
         <p>The basic postlock message delivery mechanism exchanges messages between two participants. In the case of
@@ -390,6 +428,7 @@
                 to: X,
                 type: 'transaction',
                 body: {
+                    state_version: 100,
                     in_resonse_to: "7.34",
                     ops: [
                         {
@@ -405,7 +444,8 @@
             }
             </pre>
             Then the immediately following server state is state number 110. After applying this transformation, the
-            clients will also be in server state 110.
+            clients will also be in server state 110. Note that the <code>state_version</code> field contains the
+            version of state to which the transaction applies. <code>msg.body.state_version &lt; msg.id</code>.
         </p>
 </body>
 </html>

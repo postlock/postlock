@@ -1,0 +1,121 @@
+<html>
+    <head>
+        <title>Postlock data types</title>
+        <style>
+            h1, h2 {border-bottom: 1px solid #CCC;}
+            a.toc_heading_1 { padding-left: 10px;font-size:18px;}
+            a.toc_heading_2 { padding-left: 20px;font-size:14px;}
+            a.toc_heading_3 { padding-left: 30px;font-size:12px;}
+            a.toc_heading_4 { padding-left: 40px;font-size:10px;}
+            div.toc {padding-top: 12px;padding-bottom: 12px;}
+            a.toc_numbering {color: #ccc;}
+            dt {font-weight: bold;}
+            dd {font-style: italic; border-left: 2px solid #ccc; padding-left: 4px;}
+            p.h1, h1 {padding-left: 10px;}
+            p.h2, h2 {padding-left: 20px;}
+            p.h3, h3 {padding-left: 30px;}
+            p.h4, h4 {padding-left: 40px;}
+            pre {background-color: #eee; padding: 8px;}
+
+        </style>
+        <script type="text/javascript" src="jquery-1.5.2.js"></script>
+        <script type="text/javascript">
+            // based on http://www.jankoatwarpspeed.com/post/2009/08/20/Table-of-contents-using-jQuery.aspx
+            var generate_toc = function(spec) {
+                var my = {
+                    text: $(spec.text_container),
+                    toc: $(spec.toc_container || $(spec.text_container).children('div.toc')),
+                    add_numbering: spec.add_numbering===true,
+                    fun: {
+                        traverse: function() {
+                            var level = 1, counters = [0,0,0,0,0,0];
+                            my.text.children("h1, h2, h3, h4, h5, h6").each(function(heading_id) {
+                                var h = $(this), level = parseInt(h.attr('tagName').slice(1)), num, i, h_text = h.html();
+                                counters[level -1]++;
+                                for (i = level; i < counters.length; i++) counters[i] = 0;
+                                num = counters.slice(0,level).join('.');
+                                my.toc.append("<a href='#heading" + heading_id + "' class='toc_heading_" + level + "'>" + num + ' ' + h_text + "</a><br />");
+                                if (my.add_numbering) h.html('<a class="toc_numbering" name="heading'+heading_id+'">' + num + '</a>' + ' ' + h_text);
+                                if (h.next()[0] && h.next()[0].tagName.toUpperCase() === 'P') h.next().addClass('h'+level);
+                            });
+                        }
+                    }
+                };
+                if (my.toc && my.toc.length > 0) {
+                    my.fun.traverse();
+                }
+            };
+
+            $(document).ready(function() {
+                generate_toc({
+                    text_container: 'body',
+                    add_numbering: true
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <b>Specification of data types used in postlock</b><br />
+        PLEASE UPDATE THIS DOCUMENT IF THERE ARE CHANGES IN THE PROTOCOL<br />
+        Author: Peter Neumark &lt;<i>neumark at postlock dot org</i>&gt;<br />
+        Last Modified: -<br />
+        <div class="toc"></div>
+        <h1>Introduction</h1>
+        <h2>About postlock</h2>
+        <p>Postlock is a system allowing processes running on different computers to access a globally shared state
+        space without the need to explicitly lock objects or perform low-level synchronization. Postlock has an
+        optimisitic concurrency model, meaning each client can modify the shared state without consulting with other
+        clients or the server.<br />
+        Each client maintains their own copy of the global state. Clients must apply changes to their local copy
+        first. Once the local modification is complete, the changes are sent to the postlock server which broadcasts the changes to all clients, effectively making the changes global.
+        </p>
+        <h1>Data types</h1>
+        <p>The postlock shared state is a collection of objects managed by postlock. Applications built on top of
+        postlock cannot manipulate these objects directly, they must use the operations provided by the client API.
+        Currently, the following data types are available:
+        <dl>
+        <dt>data</dt>
+            <dd>Holds arbitrary data like a JSON-encoded string or a binary string.<br/>
+                Operations:
+                <ul>
+                    <li><b>set(</b><i>newValue</i><b>)</b>: Changes the contents of the data object to be newValue.</li>
+                </ul>
+            </dd>
+        <dt>list</dt><dd>Collection of postlock objects where enclosed object are accessed by their integer indexes.<br/>
+                Operations:
+                <ul>
+                    <li><b>insert(</b><i>index</i>, <i>oid</i><b>)</b>: Inserts the object with the given object id
+                    (oid) into the list at position <code>index</code>. All elements which previously had indexes &gt;=
+                    <code>index</code> will increment their indexes by 1. If the length of the list was
+                    <code>index</code> before the operation, then the list is extended and previous list elements keep
+                    their indexes. If <code>list.length - index &gt;= 1</code> then the operation fails.</li>
+                    <li><b>remove(</b><i>index</i><b>)</b>: Removes the element at position <code>index</code> from the
+                    list. All list items which an index &gt; <code>index</code> before the operation will have their
+                    associated indexes decremeneted by one.</li>
+                </ul>
+            </dd>
+        <dt>dictionary</dt><dd>Collection of postlock objects where enclosed objects are accessed by a string key.<br/>
+                Operations:
+                <ul>
+                    <li><b>set(</b><i>key</i>, <i>oid</i><b>)</b>: Inserts the object with the given object id
+                    (oid) into the dictionary associatd with <code>key</code>. If there was a previous entry with the
+                    same key, then it will be overwritten.</li>
+                    <li><b>remove(</b><i>key</i><b>)</b>: Removes the dictionary entry associated with the given
+                    <code>key</code></li>
+                </ul>
+            </dd>
+        </dl>
+        It is important to note that operations on the collection types do not in any way affect the objects within
+        these collections. For example, <code>remove</code>ing an element from a list or dictionary does not delete the
+        object at that position, it simply removes it from the container. After the operation, the removed object can still be accessed
+        by its object id or through another collection in which it is contained.<br />
+        The operations shown above can be used in transaction messages. No "getter"-like operations are necessary, since
+        modifications to objects are broadcast to each client, meaning the local copies maintained by clients will be
+        up-to-date. When an application using postlock wishes to view the contents of an object, it can call a getter
+        function provided by the client API. This call will not result in network traffic.<br />
+        Each of the operations shown above also has an "unsafe" version, which can be used to ensure the operation
+        succeeds, even if this could lead to data loss. For more information, read the <a
+        href="transactions.html">transaction specification</a>.
+        </p>
+    </body>
+    </html>
