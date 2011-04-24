@@ -9,12 +9,22 @@
 %% init/1 must be exported because it is called by spawn/3.
 -export([init/1]).
 
+%% #postlock_transaction
+-include("plState.hrl").
+
 init(StateServerPid) ->
     listen_loop(StateServerPid).
 
 listen_loop(StateServerPid) ->
     receive
-        {transaction, Transaction} ->
+        {transaction, Transaction, TransTable} ->
+            {ok, FromStateVersion} = plMessage:json_get_value([state_version], Transaction),
+            CurrentStateVersion = gen_server:call(StateServerPid, {get_state_version}),
+            PreviousTransactions = if FromStateVersion < CurrentStateVersion ->
+                get_transactions(TransTable, FromStateVersion + 1);
+                true -> []
+            end,
+            io:format("~p ~n", [PreviousTransactions]),
             {ModifiedTransaction, ResultStorage} = process_transaction(Transaction, StateServerPid),
             % returns the result of the transaction to state server
             gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage}),
@@ -57,3 +67,5 @@ execute_command(Cmd, Oid, Params, Objects, StateServerPid) ->
     ModifiedObject = plObject:execute(CurrentObject, ExecuteParams),
     plObject:store(ModifiedObject, Objects).
 
+get_transactions(TransTable, FromStateVersion) ->
+    []. %qlc:q([T || T <- mnesia:table(TransTable), T#postlock_transaction.id >= FromStateVersion]).

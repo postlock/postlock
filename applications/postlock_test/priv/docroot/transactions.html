@@ -52,7 +52,7 @@ $(document).ready(function(){
         test("message delivery", function() {
             var mk_transaction = function(participant_id) {
                 return {
-                    base_state: 0,
+                    state_version: 0,
                     ops: [
                         {
                             cmd: "create",
@@ -92,7 +92,7 @@ $(document).ready(function(){
 
         test("transaction result", function() {
             var transaction_1 = {
-                base_state: 0,
+                state_version: 1,
                 ops: [
                     {
                         cmd: "create",
@@ -123,7 +123,7 @@ $(document).ready(function(){
             };
 
             var transaction_2 = {
-                base_state: 0,
+                state_version: 1,
                 ops: [
                     {
                         cmd: "set",

@@ -31,7 +31,7 @@
     sessionid,
     transaction_runner,
     storage,
-    last_msg_id
+    state_version
 }).
 
 %%====================================================================
@@ -65,7 +65,7 @@ init([SessionServer, SessionId]) ->
         sessionid = SessionId,
         transaction_runner = TransactionRunner,
         storage = Storage,
-        last_msg_id = 0
+        state_version = 0
     }}.
 
 %%--------------------------------------------------------------------
@@ -84,7 +84,9 @@ handle_call({get_num_public_objects}, _From, State) ->
 
 handle_call({get_object, Oid}, _From, State) ->
     {reply, plObject:get_object(Oid, State#state.storage), State};
-    %{reply, get_object(State#state.sessionid, Oid), State};
+
+handle_call({get_state_version}, _From, State) ->
+    {reply, State#state.state_version, State};
 
 handle_call(Request, _From, State) ->
     io:format("plState:handle_call got ~p~n",[Request]),
@@ -98,8 +100,8 @@ handle_call(Request, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast({transaction_result, Transaction, {plStorageTerm, Storage}}, State) ->
-    MsgId = State#state.last_msg_id + 1,
-    State1 = State#state{last_msg_id = MsgId},
+    MsgId = State#state.state_version + 1,
+    State1 = State#state{state_version = MsgId},
     store_transaction(MsgId, Transaction, State1#state.sessionid),
 
     Iter = plStorageTerm:iterator(Storage),
@@ -109,7 +111,7 @@ handle_cast({transaction_result, Transaction, {plStorageTerm, Storage}}, State) 
         id = MsgId,
         from = 1,
         to = 2,
-        type = "participant_message", % TODO: transaction
+        type = "participant_message",
         body = Transaction
     }}),
     gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
@@ -132,7 +134,8 @@ handle_cast(Msg, State) ->
 handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
-            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
+            TransTable = transaction_table_name(State#state.sessionid),
+            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body, TransTable}
     end,
     {noreply, State};
 handle_info(_Info, State) ->
