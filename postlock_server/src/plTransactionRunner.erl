@@ -26,9 +26,13 @@ listen_loop(StateServerPid) ->
                 get_transactions(TransTable, FromStateVersion + 1);
                 true -> []
             end,
-            {ResultStorage, ModifiedTransaction} = process_transaction(Transaction, CurrentStateVersion, PreviousTransactions, StateServerPid),
-            % returns the result of the transaction to state server
-            gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage}),
+            try process_transaction(Transaction, CurrentStateVersion, PreviousTransactions, StateServerPid) of
+                {ResultStorage, ModifiedTransaction} ->
+                    gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage})
+            catch
+                % TODO: propagate this
+                ot_error -> ok
+            end,
             listen_loop(StateServerPid);
         BadValue ->
             error_logger:error_report(["plTransactionRunner received unexpected message: ", BadValue]),
@@ -63,13 +67,13 @@ transform_operation(_, Cmd, Params, [], _) ->
 transform_operation(Oid, Cmd, Params, [Transaction|RemainingTransactions], StateServerPid) ->
     case Oid of
         undefined ->
+            % TODO: create/delete OTs
             transform_operation(Oid, Cmd, Params, RemainingTransactions, StateServerPid);
         _ ->
             {_Oid, TransformedCmd, TransformedParams, _StateServerPid} = lists:foldl(fun perform_ot/2, {Oid, Cmd, Params, StateServerPid}, Transaction#postlock_transaction.ops),
             transform_operation(Oid, TransformedCmd, TransformedParams, RemainingTransactions, StateServerPid)
     end.
 
-% TODO: return OT success/failure
 perform_ot(_Operation, {undefined,  Cmd, Params, StateServerPid}) ->
     % TODO: create/delete OTs
     {undefined, Cmd, Params, StateServerPid};
@@ -80,9 +84,14 @@ perform_ot(Operation, {Oid, Cmd, Params, StateServerPid}) ->
             Object = gen_server:call(StateServerPid, {get_object, Oid}),
             OldOp = wrap_object_arguments(OldCmd, OldParams),
             Op = wrap_object_arguments(Cmd, Params),
-            {_Result, _Op1, Op2} = plObject:xform(Object, OldOp, Op),
-            {TransformedCmd, TransformedParams} = extract_object_arguments(Op2),
-            {Oid, TransformedCmd, TransformedParams, StateServerPid};
+            {OtResult, _Op1, Op2} = plObject:xform(Object, OldOp, Op),
+            case OtResult of
+                ok ->
+                    {TransformedCmd, TransformedParams} = extract_object_arguments(Op2),
+                    {Oid, TransformedCmd, TransformedParams, StateServerPid};
+                fail ->
+                    throw(ot_error)
+            end;
         _ ->
             {Oid, Cmd, Params, StateServerPid}
     end.

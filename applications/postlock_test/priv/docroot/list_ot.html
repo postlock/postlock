@@ -78,7 +78,7 @@ $(document).ready(function(){
             ["remove vs insert same", "remove", [0], "insert", [1, "l"], "insert", [0, "l"]],
             ["remove vs remove before", "remove", [1], "remove", [0], "remove", [0]],
             ["remove vs remove after", "remove", [0], "remove", [1], "remove", [0]],
-            ["remove vs remove same", "remove", [0], "remove", [0], "remove", [0]]
+            ["remove vs remove same", "remove", [0], "remove", [0], null]
         ];
 
         start();
@@ -115,7 +115,7 @@ $(document).ready(function(){
                     }
                 },
 
-                var expected_1 = {
+                var expected = (data[5] == null) ? null : {
                     state_version: index * 2 + 2,
                     ops: [
                         {
@@ -124,19 +124,36 @@ $(document).ready(function(){
                             params: data[6]
                         }
                     ]
-                },
+                };
 
-                var test_messages = function() {
+                var test_messages_0 = function() {
                     deepEqual(clients[0].received[0], transaction_0.body, "Client 0 got expected message from server");
-                    deepEqual(clients[0].received[1], expected_1, "Client 0 got expected message from server");
                     deepEqual(clients[1].received[0], transaction_0.body, "Client 1 got expected message from server");
-                    deepEqual(clients[0].received[1], expected_1, "Client 1 got expected message from server");
+                    if (expected) { 
+                        wait_for_messages(1, test_messages_1);
+                    } else {
+                        $(clients).each(function(ix) {
+                            this.received = [];
+                        });
+                        setTimeout(test_messages_1, 500);
+                    }
+                    clients[1].postlock.send(transaction_1);
+                };
+
+                var test_messages_1 = function() {
+                    if (expected) {
+                        deepEqual(clients[0].received[0], expected, "Client 0 got expected message from server");
+                        deepEqual(clients[1].received[0], expected, "Client 1 got expected message from server");
+                    } else {
+                        equal(clients[0].received.length, 0, "Client 0 got expected message from server");
+                        equal(clients[1].received.length, 0, "Client 1 got expected message from server");
+                    }
                     start();
                 };
 
-                wait_for_messages(2, test_messages);
+                wait_for_messages(1, test_messages_0);
                 clients[0].postlock.send(transaction_0);
-                clients[1].postlock.send(transaction_1);
+
                 expect(clients.length * 2);
                 stop();
             });
