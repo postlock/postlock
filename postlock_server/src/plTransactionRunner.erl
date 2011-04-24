@@ -26,7 +26,7 @@ listen_loop(StateServerPid) ->
                 get_transactions(TransTable, FromStateVersion + 1);
                 true -> []
             end,
-            {ResultStorage, ModifiedTransaction} = process_transaction(Transaction, PreviousTransactions, StateServerPid),
+            {ResultStorage, ModifiedTransaction} = process_transaction(Transaction, CurrentStateVersion, PreviousTransactions, StateServerPid),
             % returns the result of the transaction to state server
             gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage}),
             listen_loop(StateServerPid);
@@ -36,11 +36,10 @@ listen_loop(StateServerPid) ->
     end.
 
 % TODO: error handling
-process_transaction(Transaction, PreviousTransactions, StateServerPid) ->
+process_transaction(Transaction, CurrentStateVersion, PreviousTransactions, StateServerPid) ->
     {ok, {array, Operations}} = plMessage:json_get_value([ops], Transaction),
     {Result, ModifiedOps, _, _} = lists:foldl(fun process_operation/2, {plObject:new_state(plStorageTerm), [], PreviousTransactions, StateServerPid}, Operations),
-    {ok, StateVersion} = plMessage:json_get_value([state_version], Transaction),
-    ModifiedTransaction0 = json:obj_store("state_version", StateVersion, json:obj_new()),
+    ModifiedTransaction0 = json:obj_store("state_version", CurrentStateVersion, json:obj_new()),
     ModifiedTransaction1 = json:obj_store("ops", {array, ModifiedOps}, ModifiedTransaction0),
     {Result, ModifiedTransaction1}.
 

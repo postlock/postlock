@@ -67,6 +67,8 @@ $(document).ready(function(){
             },
 
             var test_messages = function() {
+                deepEqual(clients[0].received[0], transaction.body, "Client 0 got expected message from server");
+                deepEqual(clients[1].received[0], transaction.body, "Client 1 got expected message from server");
                 start();
             };
 
@@ -78,7 +80,7 @@ $(document).ready(function(){
                 if (result) test_messages();
             };
             clients[0].postlock.send(transaction);
-            //expect(clients.length);
+            expect(clients.length);
             stop();
         });
 
@@ -113,7 +115,22 @@ $(document).ready(function(){
                 }
             },
 
+            var expected_1 = {
+                state_version: 2,
+                ops: [
+                    {
+                        cmd: "insert",
+                        oid: "testlist",
+                        params: [2, "s"]
+                    }
+                ]
+            },
+
             var test_messages = function() {
+                deepEqual(clients[0].received[0], transaction_0.body, "Client 0 got expected message from server");
+                deepEqual(clients[0].received[1], expected_1, "Client 0 got expected message from server");
+                deepEqual(clients[1].received[0], transaction_0.body, "Client 1 got expected message from server");
+                deepEqual(clients[0].received[1], expected_1, "Client 1 got expected message from server");
                 start();
             };
 
