@@ -15,9 +15,6 @@
 $(document).ready(function(){
     module("list_ot");
 
-    null_cb = function(client, msg) {};
-    participant_message_cb = null_cb;
-
     clients = connect_clients({
         url: get_backend_url(),
         users: [
@@ -25,29 +22,8 @@ $(document).ready(function(){
             {username: "test_username_1", password: "test_password_1"}
         ],
         on_all_connected: function() {
-            $(clients).each(function(ix) {
-                var client = this;
-                client.postlock.set_cb('participant_message', function(msg) {
-                    participant_message_cb(client, msg);
-                });
-            });
-            start();
-            run_tests();
-        },
-        on_failure: function() {
-            console.log("connection failure");
-        }
-    });
-
-    reset_received = function() {
-        $(clients).each(function(ix) {
-            this.received = [];
-        });
-    };
-
-    run_tests = function() {
-        test("create list", function() {
-            var transaction = {
+            wait_for_messages(1, run_tests);
+            clients[0].postlock.send({
                 to: 1,
                 type: 'transaction',
                 body: {
@@ -60,92 +36,111 @@ $(document).ready(function(){
                         {
                             cmd: "insert",
                             oid: "testlist",
-                            params: [0, "p"]
+                            params: [0, "a"]
                         }
                     ]
                 }
-            },
+            });
+        },
+        on_failure: function() {
+            console.log("connection failure");
+        }
+    });
 
-            var test_messages = function() {
-                deepEqual(clients[0].received[0], transaction.body, "Client 0 got expected message from server");
-                deepEqual(clients[1].received[0], transaction.body, "Client 1 got expected message from server");
-                start();
-            };
-
-            reset_received();
-            participant_message_cb = function(client, msg) {
-                var i=0, result = true;
+    wait_for_messages = function(num, callback) {
+        $(clients).each(function(ix) {
+            var client = this;
+            client.received = [];
+            client.postlock.set_cb("participant_message", function(msg) {
                 client.received.push(msg.body);
-                for (;i < clients.length;i++) result = result && clients[i].received.length == 1;
-                if (result) test_messages();
-            };
-            clients[0].postlock.send(transaction);
-            expect(clients.length);
-            stop();
+                result = true;
+                for (var i = 0; i < clients.length; i++) {
+                    result = result && clients[i].received.length == num;
+                }
+                if (result) {
+                    callback();
+                }
+            });
         });
+    }
 
-        test("insert vs insert", function() {
-            var transaction_0 = {
-                to: 1,
-                type: 'transaction',
-                body: {
-                    state_version: 1,
-                    ops: [
-                        {
-                            cmd: "insert",
-                            oid: "testlist",
-                            params: [0, "o"]
-                        }
-                    ]
-                }
-            },
+    run_tests = function() {
+        // [test name, first client cmd, first client params, second client cmf, second client params, expected result]
+        testdata = [
+            ["insert vs insert before", "insert", [1, "b"], "insert", [0, "c"], "insert",  [0, "c"]],
+            ["insert vs insert after", "insert", [0, "d"], "insert", [1, "e"], "insert",  [2, "e"]],
+            ["insert vs insert same", "insert", [1, "f"], "insert", [1, "g"], "insert",  [2, "g"]],
+            ["insert vs remove before", "insert", [1, "h"], "remove", [0], "remove", [0]],
+            ["insert vs remove after", "insert", [0, "i"], "remove", [1], "remove", [2]],
+            ["insert vs remove same", "insert", [1, "j"], "remove", [1], "remove", [2]],
+            ["remove vs insert before", "remove", [1], "insert", [0, "k"], "insert", [0, "k"]],
+            ["remove vs insert after", "remove", [0], "insert", [1, "l"], "insert", [0, "l"]],
+            ["remove vs insert same", "remove", [0], "insert", [1, "l"], "insert", [0, "l"]],
+            ["remove vs remove before", "remove", [1], "remove", [0], "remove", [0]],
+            ["remove vs remove after", "remove", [0], "remove", [1], "remove", [0]],
+            ["remove vs remove same", "remove", [0], "remove", [0], "remove", [0]]
+        ];
 
-            var transaction_1 = {
-                to: 1,
-                type: 'transaction',
-                body: {
-                    state_version: 1,
-                    ops: [
-                        {
-                            cmd: "insert",
-                            oid: "testlist",
-                            params: [1, "s"]
-                        }
-                    ]
-                }
-            },
+        start();
 
-            var expected_1 = {
-                state_version: 2,
-                ops: [
-                    {
-                        cmd: "insert",
-                        oid: "testlist",
-                        params: [2, "s"]
+        $.each(testdata, function(index, data) {
+            test(data[0], function() {
+                var transaction_0 = {
+                    to: 1,
+                    type: 'transaction',
+                    body: {
+                        state_version: index * 2 + 1,
+                        ops: [
+                            {
+                                cmd: data[1],
+                                oid: "testlist",
+                                params: data[2]
+                            }
+                        ]
                     }
-                ]
-            },
+                },
 
-            var test_messages = function() {
-                deepEqual(clients[0].received[0], transaction_0.body, "Client 0 got expected message from server");
-                deepEqual(clients[0].received[1], expected_1, "Client 0 got expected message from server");
-                deepEqual(clients[1].received[0], transaction_0.body, "Client 1 got expected message from server");
-                deepEqual(clients[0].received[1], expected_1, "Client 1 got expected message from server");
-                start();
-            };
+                var transaction_1 = {
+                    to: 1,
+                    type: 'transaction',
+                    body: {
+                        state_version: index * 2 + 1,
+                        ops: [
+                            {
+                                cmd: data[3],
+                                oid: "testlist",
+                                params: data[4]
+                            }
+                        ]
+                    }
+                },
 
-            reset_received();
-            participant_message_cb = function(client, msg) {
-                var i=0, result = true;
-                client.received.push(msg.body);
-                for (;i < clients.length;i++) result = result && clients[i].received.length == 2;
-                if (result) test_messages();
-            };
-            clients[0].postlock.send(transaction_0);
-            clients[1].postlock.send(transaction_1);
-            //expect(clients.length);
-            stop();
-        });
+                var expected_1 = {
+                    state_version: index * 2 + 2,
+                    ops: [
+                        {
+                            cmd: data[5],
+                            oid: "testlist",
+                            params: data[6]
+                        }
+                    ]
+                },
+
+                var test_messages = function() {
+                    deepEqual(clients[0].received[0], transaction_0.body, "Client 0 got expected message from server");
+                    deepEqual(clients[0].received[1], expected_1, "Client 0 got expected message from server");
+                    deepEqual(clients[1].received[0], transaction_0.body, "Client 1 got expected message from server");
+                    deepEqual(clients[0].received[1], expected_1, "Client 1 got expected message from server");
+                    start();
+                };
+
+                wait_for_messages(2, test_messages);
+                clients[0].postlock.send(transaction_0);
+                clients[1].postlock.send(transaction_1);
+                expect(clients.length * 2);
+                stop();
+            });
+        }); // $.each(testdata)
     }; // run_tests
 }); // ready()
 </script>
