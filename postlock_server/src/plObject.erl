@@ -18,6 +18,7 @@
 new_obj(Mod, Oid) -> {Mod, apply(Mod, new_obj, [Oid])}.
 get_oid({Mod, Obj}) -> apply(Mod, get_oid, [Obj]).
 execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
+xform({Mod, _Obj}, Op1, Op2) -> {Mod, apply(Mod, xform, [Op1, Op2])}.
 %%%-------------------------------------------------------------------
 %%% Functions for dealing with storage implementations.
 %%%-------------------------------------------------------------------
