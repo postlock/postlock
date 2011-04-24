@@ -43,7 +43,7 @@ process_transaction(Transaction, PreviousTransactions, StateServerPid) ->
 
 process_operation(Operation, {Objects, PreviousTransactions, StateServerPid}) ->
     {Oid, Cmd, Params} = get_operation_data(Operation),
-    {TransformedCmd, TransdormedParams} = transform_operation(Oid, erlang:list_to_atom(Cmd), Params, PreviousTransactions, StateServerPid),
+    {TransformedCmd, TransdormedParams} = transform_operation(Oid, Cmd, Params, PreviousTransactions, StateServerPid),
     {execute_operation(Oid, TransformedCmd, TransdormedParams, Objects, StateServerPid), PreviousTransactions, StateServerPid}.
 
 transform_operation(_, Cmd, Params, [], _) ->
@@ -53,8 +53,7 @@ transform_operation(Oid, Cmd, Params, [Transaction|RemainingTransactions], State
         undefined ->
             transform_operation(Oid, Cmd, Params, RemainingTransactions, StateServerPid);
         _ ->
-            {ok, {array, Ops}} = plMessage:json_get_value([ops], Transaction),
-            {_Oid, TransformedCmd, TransformedParams, _StateServerPid} = lists:foldl(fun perform_ot/2, {Oid, Cmd, Params, StateServerPid}, Ops),
+            {_Oid, TransformedCmd, TransformedParams, _StateServerPid} = lists:foldl(fun perform_ot/2, {Oid, Cmd, Params, StateServerPid}, Transaction#postlock_transaction.ops),
             transform_operation(Oid, TransformedCmd, TransformedParams, RemainingTransactions, StateServerPid)
     end.
 
@@ -105,7 +104,7 @@ get_operation_data(Operation) ->
         _ -> undefined
     end,
     {ok, {array, Params}} = plMessage:json_get_value([params], Operation),
-    {Oid, Cmd, Params}.
+    {Oid, list_to_atom(Cmd), Params}.
 
 wrap_object_arguments(Cmd, Params) ->
     lists:foldl(fun (Param, Acc) -> erlang:append_element(Acc, Param) end, {Cmd}, Params).

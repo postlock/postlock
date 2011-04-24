@@ -1,0 +1,144 @@
+<html>
+<head><title>postlock unit tests</title>
+<link href="qunit.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="jquery-1.4.4.min.js"></script>
+<script type="text/javascript" src="qunit.js"></script>
+<script type="text/javascript" src="http://localhost:8081/core.js"></script>
+<script type="text/javascript" src="http://localhost:8081/util.js"></script>
+<script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
+<script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/message_router.js"></script>
+<script type="text/javascript" src="http://localhost:8081/instance.js"></script>
+<script type="text/javascript" src="http://localhost:8081/counter.js"></script>
+<script type="text/javascript" src="testlib.js"></script>
+<script type="text/javascript">
+$(document).ready(function(){
+    module("list_ot");
+
+    null_cb = function(client, msg) {};
+    participant_message_cb = null_cb;
+
+    clients = connect_clients({
+        url: get_backend_url(),
+        users: [
+            {username: "test_username_0", password: "test_password_0"},
+            {username: "test_username_1", password: "test_password_1"}
+        ],
+        on_all_connected: function() {
+            $(clients).each(function(ix) {
+                var client = this;
+                client.postlock.set_cb('participant_message', function(msg) {
+                    participant_message_cb(client, msg);
+                });
+            });
+            start();
+            run_tests();
+        },
+        on_failure: function() {
+            console.log("connection failure");
+        }
+    });
+
+    reset_received = function() {
+        $(clients).each(function(ix) {
+            this.received = [];
+        });
+    };
+
+    run_tests = function() {
+        test("create list", function() {
+            var transaction = {
+                to: 1,
+                type: 'transaction',
+                body: {
+                    state_version: 0,
+                    ops: [
+                        {
+                            cmd: "create",
+                            params: ["testlist", "list"]
+                        },
+                        {
+                            cmd: "insert",
+                            oid: "testlist",
+                            params: [0, "p"]
+                        }
+                    ]
+                }
+            },
+
+            var test_messages = function() {
+                start();
+            };
+
+            reset_received();
+            participant_message_cb = function(client, msg) {
+                var i=0, result = true;
+                client.received.push(msg.body);
+                for (;i < clients.length;i++) result = result && clients[i].received.length == 1;
+                if (result) test_messages();
+            };
+            clients[0].postlock.send(transaction);
+            //expect(clients.length);
+            stop();
+        });
+
+        test("insert vs insert", function() {
+            var transaction_0 = {
+                to: 1,
+                type: 'transaction',
+                body: {
+                    state_version: 1,
+                    ops: [
+                        {
+                            cmd: "insert",
+                            oid: "testlist",
+                            params: [1, "o"]
+                        }
+                    ]
+                }
+            },
+
+            var transaction_1 = {
+                to: 1,
+                type: 'transaction',
+                body: {
+                    state_version: 1,
+                    ops: [
+                        {
+                            cmd: "insert",
+                            oid: "testlist",
+                            params: [1, "s"]
+                        }
+                    ]
+                }
+            },
+
+            var test_messages = function() {
+                start();
+            };
+
+            reset_received();
+            participant_message_cb = function(client, msg) {
+                var i=0, result = true;
+                client.received.push(msg.body);
+                for (;i < clients.length;i++) result = result && clients[i].received.length == 2;
+                if (result) test_messages();
+            };
+            clients[0].postlock.send(transaction_0);
+            clients[1].postlock.send(transaction_1);
+            //expect(clients.length);
+            stop();
+        });
+    }; // run_tests
+}); // ready()
+</script>
+</head>
+<body>
+<h1 id="qunit-header">Postlock unit tests</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>
