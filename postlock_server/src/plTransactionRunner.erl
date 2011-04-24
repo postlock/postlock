@@ -9,6 +9,8 @@
 %% init/1 must be exported because it is called by spawn/3.
 -export([init/1]).
 
+-include_lib("stdlib/include/qlc.hrl").
+
 %% #postlock_transaction
 -include("plState.hrl").
 
@@ -24,7 +26,6 @@ listen_loop(StateServerPid) ->
                 get_transactions(TransTable, FromStateVersion + 1);
                 true -> []
             end,
-            io:format("~p ~n", [PreviousTransactions]),
             {ModifiedTransaction, ResultStorage} = process_transaction(Transaction, StateServerPid),
             % returns the result of the transaction to state server
             gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage}),
@@ -68,4 +69,6 @@ execute_command(Cmd, Oid, Params, Objects, StateServerPid) ->
     plObject:store(ModifiedObject, Objects).
 
 get_transactions(TransTable, FromStateVersion) ->
-    []. %qlc:q([T || T <- mnesia:table(TransTable), T#postlock_transaction.id >= FromStateVersion]).
+    Query = qlc:q([T || T <- mnesia:table(TransTable), T#postlock_transaction.id >= FromStateVersion]),
+    {atomic, Result} = mnesia:transaction(fun() -> qlc:e(Query) end),
+    Result.
