@@ -26,7 +26,7 @@ listen_loop(StateServerPid) ->
                 get_transactions(TransTable, FromStateVersion + 1);
                 true -> []
             end,
-            {ModifiedTransaction, ResultStorage} = process_transaction(Transaction, PreviousTransactions, StateServerPid),
+            {ResultStorage, ModifiedTransaction} = process_transaction(Transaction, PreviousTransactions, StateServerPid),
             % returns the result of the transaction to state server
             gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage}),
             listen_loop(StateServerPid);
@@ -38,13 +38,26 @@ listen_loop(StateServerPid) ->
 % TODO: error handling
 process_transaction(Transaction, PreviousTransactions, StateServerPid) ->
     {ok, {array, Operations}} = plMessage:json_get_value([ops], Transaction),
-    {Result, _, _} = lists:foldl(fun process_operation/2, {plObject:new_state(plStorageTerm), PreviousTransactions, StateServerPid}, Operations),
-    {Transaction, Result}.
+    {Result, ModifiedOps, _, _} = lists:foldl(fun process_operation/2, {plObject:new_state(plStorageTerm), [], PreviousTransactions, StateServerPid}, Operations),
+    {ok, StateVersion} = plMessage:json_get_value([state_version], Transaction),
+    ModifiedTransaction0 = json:obj_store("state_version", StateVersion, json:obj_new()),
+    ModifiedTransaction1 = json:obj_store("ops", {array, ModifiedOps}, ModifiedTransaction0),
+    {Result, ModifiedTransaction1}.
 
-process_operation(Operation, {Objects, PreviousTransactions, StateServerPid}) ->
+process_operation(Operation, {Objects, ModifiedOps, PreviousTransactions, StateServerPid}) ->
     {Oid, Cmd, Params} = get_operation_data(Operation),
     {TransformedCmd, TransdormedParams} = transform_operation(Oid, Cmd, Params, PreviousTransactions, StateServerPid),
-    {execute_operation(Oid, TransformedCmd, TransdormedParams, Objects, StateServerPid), PreviousTransactions, StateServerPid}.
+
+    ModifiedOp0 = json:obj_store("cmd", atom_to_list(TransformedCmd), json:obj_new()),
+    ModifiedOp1 = case Oid of
+        undefined -> ModifiedOp0;
+        _ -> json:obj_store("oid", Oid, ModifiedOp0)
+    end,
+    ModifiedOp2 = json:obj_store("params", {array, TransdormedParams}, ModifiedOp1),
+    ModifiedOps1 = lists:append(ModifiedOps, [ModifiedOp2]),
+
+    Result = execute_operation(Oid, TransformedCmd, TransdormedParams, Objects, StateServerPid),
+    {Result, ModifiedOps1, PreviousTransactions, StateServerPid}.
 
 transform_operation(_, Cmd, Params, [], _) ->
     {Cmd, Params};
@@ -68,8 +81,8 @@ perform_ot(Operation, {Oid, Cmd, Params, StateServerPid}) ->
             Object = gen_server:call(StateServerPid, {get_object, Oid}),
             OldOp = wrap_object_arguments(OldCmd, OldParams),
             Op = wrap_object_arguments(Cmd, Params),
-            {_Result, Op1, _Op2} = plObject:xform(Object, OldOp, Op),
-            {TransformedCmd, TransformedParams} = extract_object_arguments(Op1),
+            {_Result, _Op1, Op2} = plObject:xform(Object, OldOp, Op),
+            {TransformedCmd, TransformedParams} = extract_object_arguments(Op2),
             {Oid, TransformedCmd, TransformedParams, StateServerPid};
         _ ->
             {Oid, Cmd, Params, StateServerPid}
