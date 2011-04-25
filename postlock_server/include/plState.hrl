@@ -35,28 +35,9 @@
     children = []           % contains a list of OIDs
 }).
 
-
-
-
-%%% ----------------------------------------------------------
-%%% postlock_transformation - the list of all transformations
-%%% which have been committed on the shared state
-%%% ----------------------------------------------------------
 -record(postlock_transaction, {
-    id,                     % transaction id integer (key)
-    client_id,
-    user_id,
-    meta                    % stuff like timestamps
-}).
-
--record(postlock_transformation, {
-    id,                     % integer (key)
-    transaction_id,         % id of transaction which this
-                            % transformation belongs to
-    oid,                    % 
-    cmd,                    % command of transformation
-    parameters,             % parameters to the command
-    undo_data               % data needed to undo transformation
+    id,
+    ops
 }).
 
 

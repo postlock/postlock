@@ -17,7 +17,7 @@
          terminate/2, code_change/3]).
 
 %% for development
--export([drop_tables/1]).
+-export([drop_transaction_table/1]).
 
 % Needed for default table attributes.
 -include("plRegistry.hrl").
@@ -30,7 +30,8 @@
     session_server,
     sessionid,
     transaction_runner,
-    storage
+    storage,
+    state_version
 }).
 
 %%====================================================================
@@ -56,15 +57,15 @@ start_link(ServerArgs) ->
 %%--------------------------------------------------------------------
 init([SessionServer, SessionId]) ->
     process_flag(trap_exit, true),
-    make_session_tables(SessionId), 
-    create_root_node(SessionId),
+    create_trasaction_table(SessionId), 
     TransactionRunner = spawn_link(plTransactionRunner, init, [self()]),
     Storage = plObject:new_state(plStorageEts),
     {ok, #state{
         session_server = SessionServer,
         sessionid = SessionId,
         transaction_runner = TransactionRunner,
-        storage = Storage
+        storage = Storage,
+        state_version = 0
     }}.
 
 %%--------------------------------------------------------------------
@@ -83,7 +84,9 @@ handle_call({get_num_public_objects}, _From, State) ->
 
 handle_call({get_object, Oid}, _From, State) ->
     {reply, plObject:get_object(Oid, State#state.storage), State};
-    %{reply, get_object(State#state.sessionid, Oid), State};
+
+handle_call({get_state_version}, _From, State) ->
+    {reply, State#state.state_version, State};
 
 handle_call(Request, _From, State) ->
     io:format("plState:handle_call got ~p~n",[Request]),
@@ -96,23 +99,28 @@ handle_call(Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-handle_cast({transaction_result, {{plStorageTerm, Storage}, Transaction}}, State) ->
-    Iter = plStorageTerm:iterator(Storage),
-    NewState = merge_transaction_result(plStorageTerm:next(Iter), State),
+handle_cast({transaction_result, Transaction, {plStorageTerm, Storage}}, State) ->
+    MsgId = State#state.state_version + 1,
+    State1 = State#state{state_version = MsgId},
+    store_transaction(MsgId, Transaction, State1#state.sessionid),
 
-    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
-        from=1,
-        to=2,
-        type="participant_message",
-        body=Transaction
+    Iter = plStorageTerm:iterator(Storage),
+    State2 = merge_transaction_result(plStorageTerm:next(Iter), State1),
+
+    gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
+        id = MsgId,
+        from = 1,
+        to = 2,
+        type = "participant_message",
+        body = Transaction
     }}),
-    gen_server:cast(State#state.session_server, {deliver_message, #pl_client_msg{
-        from=1,
-        to=3,
-        type="participant_message",
-        body=Transaction
+    gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
+        from = 1,
+        to = 3,
+        type = "participant_message",
+        body = Transaction
     }}),
-    {noreply, NewState};
+    {noreply, State2};
 handle_cast(Msg, State) ->
     io:format("plState:handle_cast got ~p~n",[Msg]),
     {noreply, State}.
@@ -126,7 +134,8 @@ handle_cast(Msg, State) ->
 handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
-            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body}
+            TransTable = transaction_table_name(State#state.sessionid),
+            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body, TransTable}
     end,
     {noreply, State};
 handle_info(_Info, State) ->
@@ -153,41 +162,29 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-sessionid_to_tablenames(SessionId) ->
-    [
-    erlang:list_to_atom("pl_objects_" ++ erlang:integer_to_list(SessionId)),
-    erlang:list_to_atom("pl_transformations_" ++ erlang:integer_to_list(SessionId))
-    ].
+transaction_table_name(SessionId) ->
+    erlang:list_to_atom("pl_transactions_" ++ erlang:integer_to_list(SessionId)).
 
-make_session_tables(SessionId) ->
-    [ObjTable, TransTable] = sessionid_to_tablenames(SessionId),
-	mnesia:create_table(ObjTable, 
-        [{record_name, postlock_object} | [{attributes, record_info(fields,postlock_object)}|
-        ?POSTLOCK_DEFAULT_TABLE_ARGS]]),
-	mnesia:create_table(TransTable, 
-        [{record_name, postlock_transformation} | [{attributes, record_info(fields,postlock_transformation)}|
+create_trasaction_table(SessionId) ->
+    TransTable = transaction_table_name(SessionId),
+    mnesia:create_table(TransTable, 
+        [{record_name, postlock_transaction} | [{attributes, record_info(fields, postlock_transaction)}|
         ?POSTLOCK_DEFAULT_TABLE_ARGS]]),
     error_logger:info_report(["Tables created successfully for session", SessionId]).
 
-create_root_node(SessionId) ->
-    [ObjTable|_] = sessionid_to_tablenames(SessionId),
-    Root = #postlock_object{
-        oid="0.0",
-        content=#postlock_content_dict{}
+drop_transaction_table(SessionId) ->
+    mnesia:delete_table(transaction_table_name(SessionId)).
+
+store_transaction(MsgId, Transaction, SessionId) ->
+    TransTable = transaction_table_name(SessionId),
+    {ok, {array, Ops}} = plMessage:json_get_value([ops], Transaction),
+    Row = #postlock_transaction{
+        id = MsgId,
+        ops = Ops
     },
-    mnesia:transaction(fun() -> mnesia:write(ObjTable, Root, write) end),
-    error_logger:info_report(["Root node created for session", SessionId]).
-
-get_object(SessionId, Oid) ->
-    [ObjTable|_]= sessionid_to_tablenames(SessionId),
-    {atomic, ObjData} = mnesia:transaction(fun() -> mnesia:read(ObjTable, Oid, read) end),
-    case ObjData of
-        [] ->  undefined;
-        [Obj] -> Obj
-    end.
-
-drop_tables(SessionId) ->
-    [mnesia:delete_table(T) || T <- sessionid_to_tablenames(SessionId)].
+    mnesia:transaction(fun() ->
+        mnesia:write(TransTable, Row, write)
+    end).
 
 merge_transaction_result(none, State) -> State;
 merge_transaction_result({Oid, Obj, Action, Iter}, State) ->
@@ -201,3 +198,4 @@ merge_transaction_result({Oid, Obj, Action, Iter}, State) ->
     end,
     Next = plStorageTerm:next(Iter),
     merge_transaction_result(Next, State).
+

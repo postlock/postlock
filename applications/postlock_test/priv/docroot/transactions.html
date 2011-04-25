@@ -52,12 +52,11 @@ $(document).ready(function(){
         test("message delivery", function() {
             var mk_transaction = function(participant_id) {
                 return {
-                    base_state: 0,
+                    state_version: 0,
                     ops: [
                         {
                             cmd: "create",
-                            oid: participant_id + "_0",
-                            params: ["data"]
+                            params: [participant_id + "_0", "data"]
                         }
                     ]
                 }
@@ -93,27 +92,23 @@ $(document).ready(function(){
 
         test("transaction result", function() {
             var transaction_1 = {
-                base_state: 0,
+                state_version: 1,
                 ops: [
                     {
                         cmd: "create",
-                        oid: "oid_0",
-                        params: ["data"]
+                        params: ["oid_0", "data"]
                     },
                     {
                         cmd: "create",
-                        oid: "oid_1",
-                        params: ["dict"]
+                        params: ["oid_1", "dict"]
                     },
                     {
                         cmd: "create",
-                        oid: "oid_2",
-                        params: ["list"]
+                        params: ["oid_2", "list"]
                     },
                     {
                         cmd: "create",
-                        oid: "oid_3",
-                        params: ["data"]
+                        params: ["oid_3", "data"]
                     },
                     {
                         cmd: "set",
@@ -122,14 +117,13 @@ $(document).ready(function(){
                     },
                     {
                         cmd: "delete",
-                        oid: "oid_2",
-                        params: []
+                        params: ["oid_2"]
                     }
                 ]
             };
 
             var transaction_2 = {
-                base_state: 0,
+                state_version: 2,
                 ops: [
                     {
                         cmd: "set",

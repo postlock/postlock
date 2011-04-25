@@ -1,0 +1,173 @@
+<html>
+<head><title>postlock unit tests</title>
+<link href="qunit.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="jquery-1.4.4.min.js"></script>
+<script type="text/javascript" src="qunit.js"></script>
+<script type="text/javascript" src="http://localhost:8081/core.js"></script>
+<script type="text/javascript" src="http://localhost:8081/util.js"></script>
+<script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
+<script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/message_router.js"></script>
+<script type="text/javascript" src="http://localhost:8081/instance.js"></script>
+<script type="text/javascript" src="http://localhost:8081/counter.js"></script>
+<script type="text/javascript" src="testlib.js"></script>
+<script type="text/javascript">
+$(document).ready(function(){
+    module("list_ot");
+
+    clients = connect_clients({
+        url: get_backend_url(),
+        users: [
+            {username: "test_username_0", password: "test_password_0"},
+            {username: "test_username_1", password: "test_password_1"}
+        ],
+        on_all_connected: function() {
+            wait_for_messages(1, run_tests);
+            clients[0].postlock.send({
+                to: 1,
+                type: 'transaction',
+                body: {
+                    state_version: 0,
+                    ops: [
+                        {
+                            cmd: "create",
+                            params: ["testlist", "list"]
+                        },
+                        {
+                            cmd: "insert",
+                            oid: "testlist",
+                            params: [0, "a"]
+                        }
+                    ]
+                }
+            });
+        },
+        on_failure: function() {
+            console.log("connection failure");
+        }
+    });
+
+    wait_for_messages = function(num, callback) {
+        $(clients).each(function(ix) {
+            var client = this;
+            client.received = [];
+            client.postlock.set_cb("participant_message", function(msg) {
+                client.received.push(msg.body);
+                result = true;
+                for (var i = 0; i < clients.length; i++) {
+                    result = result && clients[i].received.length == num;
+                }
+                if (result) {
+                    callback();
+                }
+            });
+        });
+    }
+
+    run_tests = function() {
+        // [test name, first client cmd, first client params, second client cmf, second client params, expected result]
+        testdata = [
+            ["insert vs insert before", "insert", [1, "b"], "insert", [0, "c"], "insert",  [0, "c"]],
+            ["insert vs insert after", "insert", [0, "d"], "insert", [1, "e"], "insert",  [2, "e"]],
+            ["insert vs insert same", "insert", [1, "f"], "insert", [1, "g"], "insert",  [2, "g"]],
+            ["insert vs remove before", "insert", [1, "h"], "remove", [0], "remove", [0]],
+            ["insert vs remove after", "insert", [0, "i"], "remove", [1], "remove", [2]],
+            ["insert vs remove same", "insert", [1, "j"], "remove", [1], "remove", [2]],
+            ["remove vs insert before", "remove", [1], "insert", [0, "k"], "insert", [0, "k"]],
+            ["remove vs insert after", "remove", [0], "insert", [1, "l"], "insert", [0, "l"]],
+            ["remove vs insert same", "remove", [0], "insert", [1, "l"], "insert", [0, "l"]],
+            ["remove vs remove before", "remove", [1], "remove", [0], "remove", [0]],
+            ["remove vs remove after", "remove", [0], "remove", [1], "remove", [0]],
+            ["remove vs remove same", "remove", [0], "remove", [0], null]
+        ];
+
+        start();
+
+        $.each(testdata, function(index, data) {
+            test(data[0], function() {
+                var transaction_0 = {
+                    to: 1,
+                    type: 'transaction',
+                    body: {
+                        state_version: index * 2 + 1,
+                        ops: [
+                            {
+                                cmd: data[1],
+                                oid: "testlist",
+                                params: data[2]
+                            }
+                        ]
+                    }
+                },
+
+                var transaction_1 = {
+                    to: 1,
+                    type: 'transaction',
+                    body: {
+                        state_version: index * 2 + 1,
+                        ops: [
+                            {
+                                cmd: data[3],
+                                oid: "testlist",
+                                params: data[4]
+                            }
+                        ]
+                    }
+                },
+
+                var expected = (data[5] == null) ? null : {
+                    state_version: index * 2 + 2,
+                    ops: [
+                        {
+                            cmd: data[5],
+                            oid: "testlist",
+                            params: data[6]
+                        }
+                    ]
+                };
+
+                var test_messages_0 = function() {
+                    deepEqual(clients[0].received[0], transaction_0.body, "Client 0 got expected message from server");
+                    deepEqual(clients[1].received[0], transaction_0.body, "Client 1 got expected message from server");
+                    if (expected) { 
+                        wait_for_messages(1, test_messages_1);
+                    } else {
+                        $(clients).each(function(ix) {
+                            this.received = [];
+                        });
+                        setTimeout(test_messages_1, 500);
+                    }
+                    clients[1].postlock.send(transaction_1);
+                };
+
+                var test_messages_1 = function() {
+                    if (expected) {
+                        deepEqual(clients[0].received[0], expected, "Client 0 got expected message from server");
+                        deepEqual(clients[1].received[0], expected, "Client 1 got expected message from server");
+                    } else {
+                        equal(clients[0].received.length, 0, "Client 0 got expected message from server");
+                        equal(clients[1].received.length, 0, "Client 1 got expected message from server");
+                    }
+                    start();
+                };
+
+                wait_for_messages(1, test_messages_0);
+                clients[0].postlock.send(transaction_0);
+
+                expect(clients.length * 2);
+                stop();
+            });
+        }); // $.each(testdata)
+    }; // run_tests
+}); // ready()
+</script>
+</head>
+<body>
+<h1 id="qunit-header">Postlock unit tests</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>
