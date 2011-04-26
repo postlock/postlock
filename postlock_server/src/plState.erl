@@ -1,6 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% File    : plState.erl
-%%% Author  : Peter Neumark
+%%% Author  : Peter Neumark <neumark@postlock.org>,
+%%%           Akos Toth-Mate <akos@tothmate.com>
 %%% Description : 
 %%%
 %%% Created :  7 Dec 2010 by Peter Neumark

@@ -1,6 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% File    : plTransactionRunner.erl
-%%% Author  : Peter Neumark <neumark@postlock.org>
+%%% Author  : Peter Neumark <neumark@postlock.org>, 
+%%%           Akos Toth-Mate <akos@tothmate.com>
 %%% Description : Executes transactions received from plState.
 %%%
 %%% Created :  27 Mar 2011 by Peter Neumark <neumark@postlock.org>
