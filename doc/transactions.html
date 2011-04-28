@@ -56,20 +56,10 @@
     </head>
     <body>
         <b>Specification for transactions in postlock</b><br />
-        PLEASE UPDATE THIS DOCUMENT IF THERE ARE CHANGES IN THE PROTOCOL<br />
         Author: Peter Neumark &lt;<i>neumark at postlock dot org</i>&gt;<br />
-        Last Modified: -<br />
 
         <div class="toc"></div>
         <h1>Introduction</h1>
-        <h2>About postlock</h2>
-        <p>Postlock is a system allowing processes running on different computers to access a globally shared state
-        space without the need to explicitly lock objects or perform low-level synchronization. Postlock has an
-        optimisitic concurrency model, meaning each client can modify the shared state without consulting with other
-        clients or the server.<br />
-        Each client maintains their own copy of the global state. Clients must apply changes to their local copy
-        first. Once the local modification is complete, the changes are sent to the postlock server which broadcasts the changes to all clients, effectively making the changes global.
-        </p>
         <h2>Transactions</h2>
         <p>Changes to global state are expressed as operations on data structures (an example would be
         <code>insert</code> on a list). In order to avoid corruption of the global state, these operations are grouped
@@ -124,9 +114,6 @@
                     <dd>A message with a pre-defined format containing a set of operations to be applied to a specific server state. If the receiver of the transaction
                     is in a different state than the one the transaction was created for, then the receiver must perform
                     OT to arrive at a transaction applicable in its current state.</dd>
-                <dt>participant</dt>
-                    <dd>A process connected to the postlock session which can exchange messages with the other participants.
-                    All postlock clients are participants. The state server is also a participant.</dd>
             </dl>
         </p>
 

@@ -3,38 +3,38 @@
 <head> 
     <meta charset="utf-8" /> 
     <title>Postlock Documentation</title> 
-    <link rel="stylesheet" type="text/css" href="sas/lib/jquery-tooltip/jquery.tooltip.css" />
-    <link rel="stylesheet" type="text/css" href="sas/lib/ui/css/smoothness/jquery-ui-1.8.7.custom.css" />      
-    <link rel="stylesheet" type="text/css" href="sas/css/sas.css" />      
-    <script type='text/javascript' src='sas/lib/jquery-1.5.js'></script> 
-    <script type='text/javascript' src='sas/lib/javascript-debug/ba-debug.js'></script> 
-    <script type='text/javascript' src='sas/lib/jquery-bbq/jquery.ba-bbq.js'></script> 
-    <script type='text/javascript' src='sas/lib/ui/js/jquery-ui-1.8.7.custom.min.js'></script>
-    <script type='text/javascript' src='sas/lib/jquery-tooltip/jquery.tooltip.js'></script>
-    <script type='text/javascript' src='sas/lib/raphael-min.js'></script> 
-    <script type='text/javascript' src='sas/lib/raphael-matrix.js'></script> 
-    <script type='text/javascript' src='sas/js/read_svg.js'></script> 
-    <script type='text/javascript' src='sas/js/zoom.js'></script> 
-    <script type='text/javascript' src='sas/js/toc.js'></script> 
-    <script type='text/javascript' src='sas/js/sas.js'></script> 
-    <script type="text/javascript"> 
-    $(document).ready(function(){ sas($('#content')).load(); });
-    </script> 
-    <style type="text/css">  
-            #content {display:none;}
-    </style>  
 </head> 
 <body> 
-<div id="content"></div>
-<h1>Postlock system architecture</h1>
-<div id="fig1" class="sas_diagram">
-{
-    "svg": "svg/architecture.svg",
-    "html": ["html/architecture.html"],
-    "height": 800,
-    "width": 1000
-}
-</div>
-This diagram details asdf.
+<b>main page for postlock documentation</b><br />
+Author: Peter Neumark &lt;<i>neumark at postlock dot org</i>&gt;<br />
+
+<h1>Postlock Documentation</h1>
+This is the current documentation for postlock. These files serve as both specifications for how postlock should be
+built and as an API reference aimed at developers building postlock into their own applications. Please edit these files
+<i>before</i> commiting changes to the <code>master</code> branch on github so that the documentation is always up to
+date. In addition to these files, there is also a <a href="https://github.com/postlock/postlock/wiki">postlock wiki</a> on github
+for content that is not specification/reference material.
+<h1>About postlock</h1>
+Postlock is a system allowing processes running on different computers to access a globally shared state
+space without the need to explicitly lock objects or perform low-level synchronization. Postlock has an
+optimisitic concurrency model, meaning each client can modify the shared state without consulting with other
+clients or the server.<br />
+Each client maintains their own copy of the global state. Clients must apply changes to their local copy
+first. Once the local modification is complete, the changes are sent to the postlock server which broadcasts the changes to all clients, effectively making the changes global.
+<h1>Table of contents</h1>
+<dl>
+    <dt><a href="messages.html">Messages</a></dt>
+        <dd>Postlock acts as a message bus, allowing any two clients connected to the session to exchange messages
+        asynchronously. This can be used even without postlock's shared state functionality. In fact, it may be the easiest way
+        to get server-side programs to push messages into the users' browser (using websockets). Message broadcasting is also
+        supported (although currently unimplemented) through the use of participant groups.</dd>
+    <dt><a href="datatypes.html">Data types</a></dt>
+        <dd>Postlock's shared state is composed of objects managed by postlock. These objects have a well-defined set of
+        operations which can be used to alter them.</dd>
+    <dt><a href="transactions.html">Transactions</a></dt>
+        <dd>Transactions are messages exchanged between clients and the server which carry information about changes
+        made to the local copies of postlock.
+        </dd>
+</dl>
 </body> 
 </html> 

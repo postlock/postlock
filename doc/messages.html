@@ -1,0 +1,115 @@
+<html>
+    <head>
+        <title>Postlock messages</title>
+        <style>
+            h1, h2 {border-bottom: 1px solid #CCC;}
+            a.toc_heading_1 { padding-left: 10px;font-size:18px;}
+            a.toc_heading_2 { padding-left: 20px;font-size:14px;}
+            a.toc_heading_3 { padding-left: 30px;font-size:12px;}
+            a.toc_heading_4 { padding-left: 40px;font-size:10px;}
+            div.toc {padding-top: 12px;padding-bottom: 12px;}
+            a.toc_numbering {color: #ccc;}
+            dt {font-weight: bold;}
+            dd {font-style: italic; border-left: 2px solid #ccc; padding-left: 4px;}
+            p.h1, h1 {padding-left: 10px;}
+            p.h2, h2 {padding-left: 20px;}
+            p.h3, h3 {padding-left: 30px;}
+            p.h4, h4 {padding-left: 40px;}
+            pre {background-color: #eee; padding: 8px;}
+
+        </style>
+        <script type="text/javascript" src="jquery-1.5.2.js"></script>
+        <script type="text/javascript">
+            // based on http://www.jankoatwarpspeed.com/post/2009/08/20/Table-of-contents-using-jQuery.aspx
+            var generate_toc = function(spec) {
+                var my = {
+                    text: $(spec.text_container),
+                    toc: $(spec.toc_container || $(spec.text_container).children('div.toc')),
+                    add_numbering: spec.add_numbering===true,
+                    fun: {
+                        traverse: function() {
+                            var level = 1, counters = [0,0,0,0,0,0];
+                            my.text.children("h1, h2, h3, h4, h5, h6").each(function(heading_id) {
+                                var h = $(this), level = parseInt(h.attr('tagName').slice(1)), num, i, h_text = h.html();
+                                counters[level -1]++;
+                                for (i = level; i < counters.length; i++) counters[i] = 0;
+                                num = counters.slice(0,level).join('.');
+                                my.toc.append("<a href='#heading" + heading_id + "' class='toc_heading_" + level + "'>" + num + ' ' + h_text + "</a><br />");
+                                if (my.add_numbering) h.html('<a class="toc_numbering" name="heading'+heading_id+'">' + num + '</a>' + ' ' + h_text);
+                                if (h.next()[0] && h.next()[0].tagName.toUpperCase() === 'P') h.next().addClass('h'+level);
+                            });
+                        }
+                    }
+                };
+                if (my.toc && my.toc.length > 0) {
+                    my.fun.traverse();
+                }
+            };
+
+            $(document).ready(function() {
+                generate_toc({
+                    text_container: 'body',
+                    add_numbering: true
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <b>Specification of messages in postlock</b><br />
+        Author: Peter Neumark &lt;<i>neumark at postlock dot org</i>&gt;<br />
+        <div class="toc"></div>
+        <h1>Scope of this document</h1>
+        <p>In order to allow the postlock client and server to communicate with ease, postlock is built on top of a simple but effective messaging bus.  
+        This document addresses the following aspects of postlock's message handling:
+        <ol>
+            <li>The format of messages</li>
+            <li>Message delivery mechanism</li>
+            <li>Broadcasts</li>
+        </ol>
+        </p>
+        <h1>Definition of terms used</h1>
+        <p>
+            The following terms have special meaning in the context of this document:
+            <dl>
+                <dt>session</dt>
+                    <dd>A session is a meeting point for processes. The session does not differentiate between processes
+                    running on the server and those running on a client's hardware. Sessions are created by the postlock
+                    application and require authentication to join. Implementation-wise, exactly one plSession process
+                    belongs to each postlock session. It is the responsibility of plState to maintain the list of
+                    connected participants and deliver messages between them.</dd>
+                <dt>participant</dt>
+                    <dd>A process connected to the postlock session which can exchange messages with the other participants.
+                    All postlock clients are participants. The state server is also a participant.</dd>
+                <dt>participant group</dt>
+                    <dd>A participant group is an arbitrary set of participants within the session. Messages can be
+                    addressed to the participant group, allowing broadcasting of messages. The participant groups can be
+                    queried and modified by sending messages to the plSession process responsible for the session.</dd>
+            </dl>
+        </p>
+        <h1>Message format</h1>
+        <p>
+            Postlock uses the <a href="http://www.json.org/">JSON</a> representation of data internally. Work is ongoing to allow clients to use
+            other encodings (<a href="http://thrift.apache.org">thrift</a> for example). Still, the "official"
+            representation of postlock messages is JSON, and all other formats must have clearly defined transformations
+            which convert their data into JSON messages.
+        </p>
+        <h2>JSON format</h2>
+        <p>
+            A valid JSON postlock message has the following format:
+            <pre>
+            {
+                id: /* integer - message id - mandatory */,
+                from: /* integer - originating participant id - mandatory */,
+                to: /* integer - destination participant id - optional */,
+                type: 'transaction', /* string - message type - mandatory */
+                body: /* transaction object format, see below - optional */
+            }
+            </pre>
+            Each field has a well-defined function:
+            <ul>
+                <li><b>id</b>: Each message sent by a participant must have a different message id</li>
+            </ul>
+        </p>
+ 
+    </body>
+    </html>
