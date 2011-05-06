@@ -2,6 +2,14 @@
  * core.js:
  * 1. registers global postlock variable
  */
+// from http://javascript.crockford.com/prototypal.html
+if (typeof Object.create !== 'function') {
+    Object.create = function (o) {
+        function F() {}
+        F.prototype = o;
+        return new F();
+    };
+}
 
 (function (global_scope) {
     var my = {

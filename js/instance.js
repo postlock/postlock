@@ -1,3 +1,10 @@
+/*
+ * file: instance.js
+ * author(s): Peter Neumark <neumark@postlock.org>
+ * ------------------------------------------------------------------
+ * Creates a postlock instance (of which there can be several).
+ * ------------------------------------------------------------------
+ */
 (function() {
 if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
     // POSTLOCK instance is stored in this variable.
@@ -13,9 +20,9 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
             return POSTLOCK.get(fun).apply(instance, real_args);
         };
 
-    // --- module objects belonging to this postlock instance ----
+    // ---- module objects belonging to this postlock instance ----
     instance.cb = invoke("modules.callback_manager", {
-        name:"main postlock object",
+        name:"main postlock object"
     });
     instance.connection = invoke("modules.connection", {
         cb: instance.cb, 
@@ -28,9 +35,18 @@ if (POSTLOCK) POSTLOCK.set("modules.instance", function(spec) {
         fields: ['from','type'],
         fallback_destination:  instance.cb.wrap_signal("no_destination_for_message")
     });
-    // forward received messages to message_router
+    instance.state_storage = invoke("modules.state_storage");
+    // ---- message routing configuration ----
+    // All incoming messages are sent to the message router.
     instance.cb.set_internal_cb('participant_message', 
         instance.message_router.handle_incoming);
+    // Define a route for transactions (participant id 1 hardcoded for now)
+    instance.message_router.add_route({from: 1, type: 'transaction'},
+        instance.state_storage.receive_transaction);
+    instance.message_router.add_route({from: 1, type: 'transaction_error'},
+        instance.state_storage.receive_transaction_error);
+
+
 
     // ---- data belonging to postlock instance ----
     //instance.data.counters.client_message_id = invoke("modules.counter");
