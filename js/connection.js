@@ -106,11 +106,20 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                     auth: function (msg_obj) {
                         switch (msg_obj.type) {
                             case "auth_challenge": 
-                                if (!("challenge_type" in msg_obj.body)) throw_ex("bad auth challenge", {challenge: msg_obj});
-                                if (!(msg_obj.body["challenge_type"] in my.fun.auth)) throw_ex(
-                                    "unsupported auth type: "+ msg_obj.body["challenge_type"],
-                                    {challenge: msg_obj});
-                                my.fun.websocket_safe_send({id: my.fun.get_message_id(), type: "auth_response", body: my.fun.auth[msg_obj.body["challenge_type"]](msg_obj)});
+                                if (!("challenge_type" in msg_obj.body)) {
+                                    throw_ex("bad auth challenge", {challenge: msg_obj});
+                                }
+                                if (!(msg_obj.body["challenge_type"] in my.fun.auth)) {
+                                    throw_ex(
+                                        "unsupported auth type: "+ msg_obj.body["challenge_type"],
+                                        {challenge: msg_obj}
+                                    );
+                                }
+                                my.fun.websocket_safe_send({
+                                    id: my.fun.get_message_id(), 
+                                    type: "auth_response", 
+                                    body: my.fun.auth[msg_obj.body["challenge_type"]](msg_obj)
+                                });
                                 break;
                             case "auth_success":
                                 // set client id.

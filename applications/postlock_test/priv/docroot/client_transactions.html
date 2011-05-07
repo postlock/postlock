@@ -1,0 +1,49 @@
+<html>
+<head><title>postlock unit tests</title>
+<link href="qunit.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="jquery-1.4.4.min.js"></script>
+<script type="text/javascript" src="qunit.js"></script>
+<script type="text/javascript" src="http://localhost:8081/core.js"></script>
+<script type="text/javascript" src="http://localhost:8081/util.js"></script>
+<script type="text/javascript" src="http://localhost:8081/callback_manager.js"></script>
+<script type="text/javascript" src="http://localhost:8081/connection.js"></script>
+<script type="text/javascript" src="http://localhost:8081/message_router.js"></script>
+<script type="text/javascript" src="http://localhost:8081/instance.js"></script>
+<script type="text/javascript" src="http://localhost:8081/counter.js"></script>
+<script type="text/javascript" src="http://localhost:8081/datatypes.js"></script>
+<script type="text/javascript" src="http://localhost:8081/state_storage.js"></script>
+<script type="text/javascript" src="testlib.js"></script>
+<script type="text/javascript">
+var postlock_instance;
+$(document).ready(function(){
+    module("client_transactions");
+
+    test("create data object", function() {
+        var clients = connect_clients({
+                url: get_backend_url(),
+                users: [{username: "test_username_0", password: "test_password_0"}],
+                on_all_connected: function() {
+                   postlock_instace = clients[0].postlock;
+                   equal(true, true, 'dummy test');
+                   start();
+                }
+            });
+        expect(1);
+        stop();
+        //equal(clients[recipient_ix].received, clients[i].sent, "user "+i+"'s message was received by user "+recipient_ix);
+    });
+ 
+}); // ready()
+</script>
+</head>
+<body>
+This is a temporary solution. The tests in this file
+will be merged into transactions.html.
+<h1 id="qunit-header">Postlock unit tests</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>

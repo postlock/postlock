@@ -31,6 +31,26 @@ if (POSTLOCK) POSTLOCK.set("modules.state_storage", function(spec) {
                 }
             },
             fun: {
+                // regular javascript constructor (to be used with new)
+                // to create a context object.
+                Context: function(spec) {
+                    // ---- initialize data first ----
+                    // objects contains the oid -> object
+                    // mapping of objects that live in 
+                    // the context
+                    this.objects = {};
+                    // during transactions, we want the
+                    // list of deleted objects instead
+                    // of actually removing dictionary 
+                    // elements. To actually commit
+                    // the delete, call flush_deleted().
+                    this.deleted = [];
+                    // ---- functions ----
+                    this.load = function (oid) {};
+                    this.save = function (obj) {};
+                    this.remove = function(oid) {};
+                    this.flush_deleted = function() {};
+                },
                 // ---- functions for object storage/retrieval ----
                 load: function (oid, context) {return my.objects[oid];},
                 save: function (obj, context) {my.objects[oid] = obj;},

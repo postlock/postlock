@@ -1,22 +1,36 @@
 /* datatypes.js - defines postlock datatypes for use in js client api.
- * The object have a prototypal inheritance structure:
+ * The objects have a prototypal inheritance structure:
  *          common_base
+ *          -----------
  *               |
  *       dict   list   data
+ *       ------------------
  *        |      |      |
  *      (object instances)
+ *      ------------------
  * Since the internal data structures of a data type should not
  * be exposed to the api user, we cannot give users the object
  * instances directly. Instead, each instance has an exports object
  * which contains a set of functions that make up the api. The functions
- * in the exports object do not use 'this', as they are bound to their
- * instance. The make_exports function in common base creates these
- * functions.
+ * in the exports object cannot use 'this', so they are bound to their
+ * object instance. 
  *
+ * These data type objects are used both by the API user when the
+ * application needs to create a new postlock object and by state_storage
+ * when it executes a transaction broadcast by the state server. In the
+ * latter case, object creation does not need to be wrapped in a transaction
+ * and the exported functions are never used. Setting spec.internal to true
+ * will make the objects work this way.
+ *
+ * The code in the datatypes module is mostly independent of the postlock
+ * instance. Unfortuantely, there are two exceptions to this rule:
+ * 1. get() calls return objects instead of oid's
+ * 2. transactions created by the module must be placed in the postlock
+ *    instance's outgoing transaction queue.
  */
 (function () {
     if (!POSTLOCK) return;
-    POSTLOCK.set("modules.datatypes", function (spec) {
+    POSTLOCK.set("modules.datatypes", function () {
         var instance = this,
             invoke = function (fun, args) {
                 var a = args || [], real_args = ('length' in a)?a:[a];
@@ -83,7 +97,7 @@
                         return (typeof(t) === 'object' &&
                                 typeof(t.execute) === 'function');
                     },
-                    require_transaction: function (fun, transaction) {
+                    guarantee_transaction: function (fun, transaction) {
                         var transaction_needed = !my.fun.is_transaction(transaction);
                         // if no transaction is passed to us, 
                         // lets create one:
@@ -107,7 +121,6 @@
                         exports = {}, 
                         obj_instance = this, 
                         add_op_to_transaction: function (is_safe, op, args) {
-                            // Queue an operation on the current object.
                             // 1. Adds the operation to the current transaction.
                             // 2. If the transaction is created here, executes it as well.
                             // 3. Returns the transaction.
@@ -120,8 +133,8 @@
                             obj_instance[op].apply(obj_instance, op_parameters);
                             // if a transaction was provided by the user,
                             // it will be the last element in args
-                            my.fun.require_transaction(
-                                function (t, new_transaction) {
+                            my.fun.guarantee_transaction(
+                                function (t) {
                                     // add the operation to the transaction
                                     t.add_operation({
                                         oid: obj_instance.oid,
@@ -175,10 +188,30 @@
                     }
                     return exports;
                },     
-               init: function (spec) {
+               init: function (spec, transaction) {
                     this.oid = spec.oid;
-                    if (this.init_data) this.init_data(spec);
-                    this.exports = (spec.internal === true)?{}:this.make_exports();
+                    this.exports = {};
+                    if (spec.internal !== true) {
+                        this.exports = this.make_exports();
+                        transaction = my.fun.guarantee_transaction(
+                            function (t) {
+                                t.add_operation({
+                                    cmd: 'create',
+                                    params: [{
+                                        oid: obj_instance.oid,
+                                        type: obj_instance.type,
+                                    }]
+                                });
+                                // The init data function has access to the create transaction
+                                // so it can add futher operations if necessary.
+                                if (obj_instance.init_data) obj_instance.init_data(spec, t);
+                            },
+                            transaction
+                        );
+                        // transaction is saved to spec if the caller
+                        // needs access to it.
+                        spec.transaction = transaction;
+                    }
                     return this;
                },
                oid: my.fun.api(function() {
@@ -190,6 +223,7 @@
              * with its own functions.
              */
             my.base_objects.data = merge({
+                type: 'data,
                 init_data: function () {
                     this.state = null;
                 }
@@ -202,7 +236,8 @@
                     return this.state; 
                 })
             }, Object.create(my.base_objects.common_base));
-            my.base_objects.dict = merge({
+            my.base_objects.dict = merge({ 
+                type: 'dict',
                 init_data: function () {
                     this.state = {};
                 },
@@ -240,6 +275,7 @@
                 })
             }, Object.create(my.base_objects.common_base));
             my.base_objects.list = merge({
+                type: 'list',
                 init_data: function () {
                     this.state = [];
                 },
@@ -290,15 +326,18 @@
            }, Object.create(my.base_objects.common_base));
 
         // ---- datatypes API: used to make new instances of data types ----
+        // Note that these functions are not meant to be exposed to the user because
+        // 1. the assume spec.oid is valid
+        // 2. return the instance, when the user should receive instance.exports
         return {
-            make_data: function (spec) {
-                return Object.create(my.base_objects.data).init(spec);
+            data: function (spec, transaction) {
+                return Object.create(my.base_objects.data).init(spec, transaction);
             },
-            make_dict: function (spec) {
-                return Object.create(my.base_objects.dict).init(spec);
+            dict: function (spec, transaction) {
+                return Object.create(my.base_objects.dict).init(spec, transaction);
             },
-            make_list: function (spec) {
-                return Object.create(my.base_objects.list).init(spec);
+            list: function (spec, transaction) {
+                return Object.create(my.base_objects.list).init(spec, transaction);
             }
         };
     });
