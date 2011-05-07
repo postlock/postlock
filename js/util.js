@@ -8,16 +8,6 @@ var util = {
     fire: function(oid, signal, args) {
         return this.cb.fire(signal,args);
     },
-    require_transaction: function (fun, t, t_spec) {
-        var ret = {}, apply_t = false;
-        if (!util.is_transaction.apply(this,[t])) {
-            apply_t = true;
-            t = POSTLOCK.get("modules.transaction").apply(this, [t_spec]);
-        }
-        ret = {value: fun(t), transaction: t};
-        if (apply_t) t.apply();
-        return ret;
-    },
     // from: http://www.javascriptkit.com/javatutors/arraysort.shtml
     numeric_sort: function (a, b) {
         return (a - b);
