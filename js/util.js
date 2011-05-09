@@ -43,15 +43,20 @@ var util = {
         return typeof t === "object" && typeof t.get_tid === "function";
     },
     // from: http://stackoverflow.com/questions/122102/what-is-the-most-efficient-way-to-clone-a-javascript-object
+    // performs a deep copy if the data type of the object is supported.
     clone: function (from) {
+        var name, to;
         if (from == null || typeof from != "object") return from;
-        if (from.constructor != Object && from.constructor != Array) return from;
         if (from.constructor == Date || from.constructor == RegExp || from.constructor == Function ||
-            from.constructor == String || from.constructor == Number || from.constructor == Boolean)
+            from.constructor == String || from.constructor == Number || from.constructor == Boolean) {
             return new from.constructor(from);
+        }
+        if (from.constructor != Object && from.constructor != Array) return from;
         to = new from.constructor();
-        for (var name in from) {
-            to[name] = typeof to[name] == "undefined" ? this.extend(from[name], null) : to[name];
+        for (name in from) {
+            if (from.hasOwnProperty(name)) {
+                to[name] = arguments.callee(from[name]);
+            }
         }
         return to;
     },
@@ -64,7 +69,13 @@ var util = {
     retry_until: function (condition, cb_success, cb_failure, num_retries, timeout) {
         var ms = timeout || 10, 
             retries = num_retries || 5,
-            on_failure = cb_failure || function () {util.throw_ex.apply(this,["retry_until failed", {args: util.args2array(arguments)}]);},
+            on_failure = cb_failure || function () {
+                util.throw_ex.apply(
+                    this,
+                    ["retry_until failed", 
+                    {args: util.args2array(arguments)}]
+                );
+            },
             do_try = function (r) {
                 if (condition()) return {success: cb_success()};
                 if (r === 0) return {failure: on_failure()};

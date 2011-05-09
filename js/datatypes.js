@@ -1,4 +1,7 @@
-/* datatypes.js - defines postlock datatypes for use in js client api.
+/* file: datatypes.js
+ * author(s): Peter Neumark <neumark@postlock.org>
+ * ----------------------------------------------------------------------------
+ * The module defines postlock datatypes for use in js client api.
  * The objects have a prototypal inheritance structure:
  *          common_base
  *          -----------
@@ -22,19 +25,31 @@
  * and the exported functions are never used. Setting spec.internal to true
  * will make the objects work this way.
  *
- * The code in the datatypes module is mostly independent of the postlock
- * instance. Unfortuantely, there are two exceptions to this rule:
- * 1. get() calls return objects instead of oid's
- * 2. transactions created by the module must be placed in the postlock
- *    instance's outgoing transaction queue.
+ * The code in the datatypes module is independent of the postlock
+ * instance, but the postlock object instances are tied to the instance
+ * that creates them (which is passed in as spec.postlock_instance).
+ *
+ * In order to make the same object work in every context, the internal
+ * state of objects is stored in the transaction's context, not in the
+ * object itself.
+ * A 'regular' javascript constructor, State() is required to exist for
+ * each datatype. State is only required to have a single function: clone(),
+ * which creates a copy of itself. The cloned version should be a deep copy
+ * so that the two instances of the state object can be modified without
+ * one affecting the other. 
+ * 
  */
 (function () {
     if (!POSTLOCK) return;
-    POSTLOCK.set("modules.datatypes", function () {
-        var instance = this,
-            invoke = function (fun, args) {
-                var a = args || [], real_args = ('length' in a)?a:[a];
-                return POSTLOCK.get(fun).apply(instance, real_args);
+    POSTLOCK.set("modules.datatypes", (function () {
+            // invoke is not bound to a postlock instance
+        var invoke = function (fun, args) {
+                var a = args || [];
+                    if (typeof(a) === 'string' ||
+                        !('length' in a)) {
+                        a = [a];
+                    }
+                return POSTLOCK.get(fun).apply(null, a);
             },
             my = {
                 constants: {
@@ -51,25 +66,6 @@
                             }
                         }
                         return dst;
-                    },
-                    // takes an oid or an object and returns an oid
-                    to_oid = function(o) {
-                        if (typeof(o) === 'string') {
-                            return String(o);
-                        }
-                        if (typeof(o) === 'object') &&
-                            typeof(o.oid) === 'function) {
-                            return o.oid();
-                        }
-                        invoke("util.throw_ex", 
-                            "attempted to get oid of non-postlock object");
-                    },
-                    // takes an oid or an object and returns an object
-                    to_obj = function(o) {
-                        if (typeof(o) === 'string') {
-                            return instance.state_storage.get(o);
-                        }
-                        return o;
                     },
                     // functions to add metadata to other functions
                     api = function(fun) {
@@ -93,27 +89,9 @@
                     ix2key: function (ix) {
                         return ix.substr(my.constants.DICT_PREFIX.length);
                     },
-                    is_transaction: function (t) {
-                        return (typeof(t) === 'object' &&
-                                typeof(t.execute) === 'function');
-                    },
-                    guarantee_transaction: function (fun, transaction) {
-                        var transaction_needed = !my.fun.is_transaction(transaction);
-                        // if no transaction is passed to us, 
-                        // lets create one:
-                        if (transaction_needed) {
-                            transaction = invoke('modules.transaction');
-                        }
-                        fun(transaction, transaction_needed);
-                        if (transaction_needed) {
-                            transaction.execute();
-                        }
-                        return transaction;
-                    }
                 } // end my.fun
             }; // end my
-            my.base_objects = {};
-            my.base_objects.common_base = {
+            my.common_base = {
                 // create exports object containing public functions
                 // bound to the obj_instance
                 make_exports: function () {
@@ -121,30 +99,27 @@
                         exports = {}, 
                         obj_instance = this, 
                         add_op_to_transaction: function (is_safe, op, args) {
-                            // 1. Adds the operation to the current transaction.
-                            // 2. If the transaction is created here, executes it as well.
-                            // 3. Returns the transaction.
-                            var transaction;
-                            var op_parameters = invoke('util.args2array', [args]);
-                            if (args.length > 0 && 
-                                my.fun.is_transaction(args[args.length - 1])) {
-                                transaction = op_parameters.pop();
-                            }
-                            obj_instance[op].apply(obj_instance, op_parameters);
-                            // if a transaction was provided by the user,
-                            // it will be the last element in args
-                            my.fun.guarantee_transaction(
-                                function (t) {
+                            // 1. Performs the operation locally
+                            // 2. Adds the operation to the current transaction.
+                            // This order is important because if the operation failes
+                            // (bad parameters, for example), then the transaction should
+                            // not include the bad op.
+                            try {
+                                this.postlock_instance.state.run_in_transaction(function () {
+                                    // apply the operation locally
+                                    obj_instance[op].apply(obj_instance, args);
                                     // add the operation to the transaction
-                                    t.add_operation({
-                                        oid: obj_instance.oid,
+                                    obj_instance.postlock_instance.state.current_transaction().add_op({
+                                        oid: obj_instance.oid(),
                                         cmd: op,
                                         safe: is_safe,
                                         params: op_parameters
                                     });
-                                },
-                                transaction
-                            );
+                                });
+                            } catch (e) {
+                                // The local operation could not be executed.
+                                invoke('util.throw_ex', ["local operation failed", e]);
+                            }
                         };
                     // iterate through each function in the entire
                     // prototype chain, exporting functions
@@ -187,158 +162,214 @@
                         }
                     }
                     return exports;
-               },     
-               init: function (spec, transaction) {
-                    this.oid = spec.oid;
-                    this.exports = {};
-                    if (spec.internal !== true) {
-                        this.exports = this.make_exports();
-                        transaction = my.fun.guarantee_transaction(
-                            function (t) {
-                                t.add_operation({
-                                    cmd: 'create',
-                                    params: [{
-                                        oid: obj_instance.oid,
-                                        type: obj_instance.type,
-                                    }]
-                                });
-                                // The init data function has access to the create transaction
-                                // so it can add futher operations if necessary.
-                                if (obj_instance.init_data) obj_instance.init_data(spec, t);
-                            },
-                            transaction
-                        );
-                        // transaction is saved to spec if the caller
-                        // needs access to it.
-                        spec.transaction = transaction;
+                },     
+                // Since context can change, there should be no references to state
+                // shared by the methods of this object, get_state should be used
+                // by each function!
+                get_state: function() {
+                    // get automatically clones state if it does not yet exist in the
+                    // current context.
+                    return this.postlock_instance.state.current_transaction().context.get(this.oid());
+                },
+                get_state_ref: function() {
+                    return this.postlock_instance.state.current_transaction().context.get_ref(this.oid());
+                },
+                set_state: function(state) {
+                    return this.postlock_instance.state.current_transaction().context.set(this.oid(), state);
+                },
+                get_object: function(oid) {
+                    var o = this.postlock_instance.state.get_object(oid);
+                    if (typeof(o) === 'object') {
+                        return o.exports;
                     }
-                    return this;
-               },
-               oid: my.fun.api(function() {
-                    return String(this.oid);
-               })
+                    // this shouldn't happen...
+                    return o;
+                }
+                init: function (spec) {
+                    this.postlock_instance = spec.postlock_instance;
+                    this.oid = spec.oid;
+                    this.exports = this.make_exports();
+                    this.set_state(new this.State(spec.state));
+                },
+                oid: my.fun.api(function() {
+                    return this.oid;
+                }),
             };
+            my.base_objects = {};
             /* The prototypes for the different data types follow.
              * Each prototype inherits from common_base, but is extended
              * with its own functions.
              */
-            my.base_objects.data = merge({
-                type: 'data,
-                init_data: function () {
-                    this.state = null;
-                }
+            // ---- data object ----
+            my.base_objects.data = my.fun.merge({
                 set: my.fun.op(function (value) {
-                    this.state = value;
+                    this.set_state(new this.State(value));
                 }),
                 get: my.fun.api(function () {
-                    // reference to state returned.
-                    // users should be smart enough not to change it...
-                    return this.state; 
+                    // return a cloned version of internal state:
+                    return get_state_ref().clone().data; 
                 })
-            }, Object.create(my.base_objects.common_base));
-            my.base_objects.dict = merge({ 
-                type: 'dict',
-                init_data: function () {
-                    this.state = {};
-                },
-                set: my.fun.op(function (key, obj_or_oid) {
-                    // o can be and oid or it can be an object
-                    this.state[my.fun.key2ix(key)] = to_oid(obj_or_oid);
+            }, Object.create(my.common_base));
+            my.base_objects.data.State: function (data) {
+                this.data = data;
+            };
+            my.base_objects.data.State.prototype.clone = function() {
+                var cloned_data = invoke('util.clone', [this.data]);
+                return new my.base_objects.data.State(cloned_data);
+            };
+            // ---- dict object ----
+            my.base_objects.dict = my.fun.merge({ 
+                set: my.fun.op(function (key, object) {
+                    var state = my.get_state();
+                    state.data[my.fun.key2ix(key)] = object.oid();
+                    this.set_state(state);
                 }),
                 unset: my.fun.op(function (key) {
+                    var state = this.get_state();
                     var ix = my.fun.key2ix(key);
-                    if (!this.state.hasOwnProperty(ix)) {
-                        invoke("util.throw_ex", 'cannot unset missing key');
+                    if (!state.data.hasOwnProperty(ix)) {
+                        invoke("util.throw_ex", 'cannot unset missing key '+key);
                     }
-                    delete this.state[ix];
+                    delete state.data[ix];
+                    this.set_state(state);
                 }),
                 get: my.fun.api(function (key) {
-                    // returns obj, not oid
+                    var state = this.get_state_ref();
                     var ix = my.fun.key2ix(key);
-                    if (!this.state.hasOwnProperty(ix)) {
+                    if (!state.data.hasOwnProperty(ix)) {
                         invoke("util.throw_ex", 'dict: key "'+key+'" is unbound');
                     }
-                    return to_obj(this.state[ix]); 
+                    // returns obj, not oid
+                    return this.get_object(state.data[ix]);
                 }),
-                get_raw: function (key) {
-                    return this.state[my.fun.key2ix(key)]; 
-                },
                 // note: the order of the keys is arbitrary.
                 keys: my.fun.api(function () {
+                    var state = this.get_state_ref();
                     var i, keys = [];
-                    for (i in my.state) {
-                        if (my.state.hasOwnProperty(i)) {
+                    for (i in state.data) {
+                        if (state.data.hasOwnProperty(i)) {
                             keys.push(my.fun.ix2key(i));
                         }
                     }
                     return keys;
                 })
-            }, Object.create(my.base_objects.common_base));
-            my.base_objects.list = merge({
-                type: 'list',
-                init_data: function () {
-                    this.state = [];
-                },
+            }, Object.create(my.common_base));
+            my.base_objects.dict.State: function (data) {
+                this.data = data;
+            };
+            my.base_objects.dict.State.prototype.clone = function() {
+                var cloned_data = my.fun.merge(this.data, {});
+                return new my.base_objects.dict.State(cloned_data);
+            };
+            // ---- list object ----
+            my.base_objects.list = my.fun.merge({
                 // inserts cannot lead to data loss, no
                 // unsafe_insert necessary.
-                insert: my.fun.op_no_unsafe(function (pos, o) {
+                insert: my.fun.op_no_unsafe(function (pos, object) {
                     var i, 
-                        oid = to_oid(o),
-                        tmp_list;
-                    if (pos === my.state.length) {
+                        oid = object.oid(),
+                        tmp_list,
+                        state = this.get_state();
+                    if (pos === state.data.length) {
                         // append to end of list
-                        my.state.push(value);
-                        return;
+                        state.data.push(value);
                     }
-                    if (pos < my.state.length) {
+                    else if (pos < state.data.length) {
                         // move later elements back
-                        tmp_list = my.state.slice(0,pos);
+                        tmp_list = state.data.slice(0,pos);
                         tmp_list.push(oid);
-                        for (i = pos; i < my.state.length; i++) {
-                            tmp_list.push(my.state[i]);
+                        for (i = pos; i < state.data.length; i++) {
+                            tmp_list.push(state.data[i]);
                         }
-                        my.state = tmp_list;
+                        state.data = tmp_list;
                         return;
                     }
+                    else {
                     invoke("util.throw_ex", 
                         "invalid position for list.insert: " + pos);
+                    }
+                    this.save_state(state);
                 }),
                 remove: my.fun.op(function (pos) {
-                    delete this.state[my.fun.key2ix(key)];
+                    var i, tmp_list,
+                        state = this.get_state();
+                    if (pos < 0 || pos >= state.data.length) {
+                        invoke('util.throw_ex', 'invalid position for list.remove: '+pos);
+                    }
+                    if (pos === (state.data.length - 1)) {
+                        // append to end of list
+                        state.data.pop();
+                    } else {
+                        tmp_list = state.data.slice(0,pos);
+                        for (i = pos + 1; i < state.data.length; i++) {
+                            tmp_list.push(state.data[i]);
+                        }
+                        state.data = tmp_list;
+                    }
+                    this.save_state(state);
                 }),
                 get: my.fun.api(function (pos) {
-                    // reference to state returned.
-                    // users should be smart enough not to change it...
+                    var state = this.get_state();
                     if (pos < 0 || pos >= this.state.length) {
-                        invoke('util.throw_ex', "invalid list position");
+                        invoke('util.throw_ex', "invalid list position "+pos);
                     }
-                    return to_obj(this.state[pos]); 
+                    return this.get_object(state.data[pos]); 
                 }),
-                get_raw: function (pos) {
-                   return this.state[pos]; 
-                },
                 length: my.fun.api(function () {
-                    // reference to state returned.
-                    // users should be smart enough not to change it...
-                    return this.state.length; 
+                    return this.get_state().data.length;
                 })
                 // TODO: queue, stack API functions
-           }, Object.create(my.base_objects.common_base));
-
-        // ---- datatypes API: used to make new instances of data types ----
-        // Note that these functions are not meant to be exposed to the user because
-        // 1. the assume spec.oid is valid
-        // 2. return the instance, when the user should receive instance.exports
-        return {
-            data: function (spec, transaction) {
-                return Object.create(my.base_objects.data).init(spec, transaction);
-            },
-            dict: function (spec, transaction) {
-                return Object.create(my.base_objects.dict).init(spec, transaction);
-            },
-            list: function (spec, transaction) {
-                return Object.create(my.base_objects.list).init(spec, transaction);
-            }
+            }, Object.create(my.common_base));
+            my.base_objects.list.State: function (data) {
+                this.data = data;
+            };
+            my.base_objects.list.State.prototype.clone = function() {
+                var cloned_data = Array.prototype.slice.apply(this.data)
+                return new my.base_objects.list.State(cloned_data);
+            };
+ 
+        /* Create constructors for data types.
+         * Each type has two constructor functions: one bare-bone internal
+         * and one which adds the create operation to the current transaction.
+         */
+        my.fun.cons = {
+            public_cons: {}
+            private_cons: {}
         };
-    });
+        (function() {
+            var i;
+            for (i in my.base_objects) {
+                if (my.base_objects.hasOwnProperty(i)) {
+                    // spec.postlock_instance and spec.oid must be set
+                    // for both constructors.
+                    my.fun.cons.private_cons[i] = (function() {
+                        var type = i;
+                        return function(spec) {
+                            spec.type = i;
+                            return Object.create(my.base_objects[type]).init(spec);
+                        }
+                    }());
+                    my.fun.cons.public_cons[i] = (function() {
+                        var type = i;
+                        return function(spec) {
+                            spec.postlock_instance.state.run_in_transaction(function () {
+                                // 1. create the object first
+                                var obj = my.fun.cons.private_cons[type](spec);
+                                // 2. add the 'create' op to the transaction
+                                spec.postlock_instance.state.current_transaction.add_op({
+                                    cmd: 'create',
+                                    params: [{
+                                        oid: spec.oid,
+                                        type: type,
+                                        state: spec.state // important for 'data' objects
+                                    }]
+                                });
+                            });
+                        };
+                    }());
+                }
+            }
+        }());
+        return my.fun.cons;
+    }()));
 }());
