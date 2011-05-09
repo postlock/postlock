@@ -1,15 +1,12 @@
 (function() {
-if (POSTLOCK) POSTLOCK.set("modules.callback_manager", function (spec) {
+if (POSTLOCK) POSTLOCK.internal.set("modules.callback_manager", function (spec) {
     // format of spec:
     // {
     //      string name (optional)
     // }
     // MODULE PRIVATE DATA:
     var instance = this,
-        invoke = function(fun, args) {
-            var a = args || [], real_args = ('length' in a)?a:[a];
-            return POSTLOCK.get(fun).apply(instance, real_args);
-	    },
+        invoke = POSTLOCK.internal.make_invoke_fun(instance);
     	my = {
         async_delay: 0,
         id: spec.name || "[unnamed object]",

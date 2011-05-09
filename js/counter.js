@@ -1,5 +1,5 @@
 (function() {
-if (POSTLOCK) POSTLOCK.set("modules.counter", 
+if (POSTLOCK) POSTLOCK.internal.set("modules.counter", 
     function (initial_val) {
         // From Javascript - The Good Parts
         // Produce an object that produces unique strings. A

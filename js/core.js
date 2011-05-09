@@ -10,7 +10,6 @@ if (typeof Object.create !== 'function') {
         return new F();
     };
 }
-
 (function (global_scope) {
     var my = {
         values: {},
@@ -41,15 +40,28 @@ if (typeof Object.create !== 'function') {
             },
             make_new: function(spec) {
                 return my.fun.get("modules.instance")(spec);
+            },
+            make_invoke_fun(instance) {
+                return function (fun, args) {
+                    var a = (args === undefined)?[]:args;
+                        if (typeof(a) === 'string' ||
+                            !('length' in a)) {
+                            a = [a];
+                        }
+                    return POSTLOCK.get(fun).apply(instance, a);
+                };
             }
         }
     };
     if (!('POSTLOCK' in global_scope)) {
         global_scope['POSTLOCK'] = {
-            set: my.fun.set,
-            // note: return undefined if key is undefined
-            get: my.fun.get,
-            make_new: my.fun.make_new 
+            make_new: my.fun.make_new,
+            internal: {
+                set: my.fun.set,
+                // note: return undefined if key is undefined
+                get: my.fun.get,
+                make_invoke_fun: my.fun.make_invoke_fun
+            }
         }
     } 
 })(window || this);

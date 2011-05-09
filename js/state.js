@@ -41,12 +41,9 @@
  */
 
 (function() {
-if (POSTLOCK) POSTLOCK.set("modules.state", function(spec) {
+if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
     var instance = this,
-        invoke = function(fun, args) {
-            var a = args || [], real_args = ('length' in a)?a:[a];
-            return POSTLOCK.get(fun).apply(instance, real_args);
-	    },
+        invoke = POSTLOCK.internal.make_invoke_fun(instance);
         my = {
             // Transactions will most likely fail on the server,
             // but local failure cannot be ruled out, which will
@@ -95,6 +92,9 @@ if (POSTLOCK) POSTLOCK.set("modules.state", function(spec) {
     };
     my.fun.get_object = function(oid) {
         return my.objects[oid];
+    };
+    my.fun.save_object = function(object) {
+        my.objects[object.oid()] = object;
     };
     // run_in_transaction guarantees that the current transaction
     // will be open by creating a new transaction if necessary.
@@ -358,13 +358,22 @@ if (POSTLOCK) POSTLOCK.set("modules.state", function(spec) {
                     // the operation is a create or delete
                     switch (msg.body.ops[i].cmd) {
                         case 'create':
+                            invoke('modules.datatypes.make',
+                                invoke('util.shallow_copy', [
+                                    msg.body.ops[i].params[0],
+                                    {postlock_instance: instance}
+                                ])
+                            );
                             break;
                         case 'delete':
+                            console.dir('STUB');
+                            invoke('util.throw_ex', 'STUB');
                             break;
                         default:
                             invoke(
                                 'util.throw_ex', 
-                                ['bad cmd in op', msg.body.ops[i]]);
+                                ['bad cmd in op', msg.body.ops[i]]
+                            );
                     }
                 }
             }
@@ -379,11 +388,13 @@ if (POSTLOCK) POSTLOCK.set("modules.state", function(spec) {
         receive_transaction: my.fun.receive_transaction,
         receive_transaction_error: my.fun.receive_transaction_error,
         run_in_transaction: my.fun.run_in_transaction,
-        current_transaction: my.fun.current_transaction
+        current_transaction: my.fun.current_transaction,
+        get_object: my.fun.get_object,
+        save_object: my.fun.save_object,
         // ---- to be exported to the api user ----
         exports: {
             run_in_transaction: my.fun.run_in_transaction,
-            get_object: my.fun.get_objeet
+            get_object: my.fun.get_object
         }
     };
 }); 

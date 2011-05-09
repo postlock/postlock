@@ -19,7 +19,7 @@
  * object instance. 
  *
  * These data type objects are used both by the API user when the
- * application needs to create a new postlock object and by state_storage
+ * application needs to create a new postlock object and by state
  * when it executes a transaction broadcast by the state server. In the
  * latter case, object creation does not need to be wrapped in a transaction
  * and the exported functions are never used. Setting spec.internal to true
@@ -41,32 +41,15 @@
  */
 (function () {
     if (!POSTLOCK) return;
-    POSTLOCK.set("modules.datatypes", (function () {
+    POSTLOCK.internal.set("modules.datatypes", (function () {
             // invoke is not bound to a postlock instance
-        var invoke = function (fun, args) {
-                var a = args || [];
-                    if (typeof(a) === 'string' ||
-                        !('length' in a)) {
-                        a = [a];
-                    }
-                return POSTLOCK.get(fun).apply(null, a);
-            },
+        var invoke = POSTLOCK.internal.make_invoke_fun(null);
             my = {
                 constants: {
                     UNSAFE_PREFIX = "unsafe_",
                     DICT_PREFIX = "entry_"
                 },
                 fun: {
-                    merge = function (src, dst) {
-                        var i;
-                        if (typeof(src) !== 'object') return dst;
-                        for (i in src) {
-                            if (src.hasOwnProperty(i)) {
-                                dst[i] = src[i];
-                            }
-                        }
-                        return dst;
-                    },
                     // functions to add metadata to other functions
                     api = function(fun) {
                         fun.type = 'api';
@@ -179,11 +162,10 @@
                 },
                 get_object: function(oid) {
                     var o = this.postlock_instance.state.get_object(oid);
-                    if (typeof(o) === 'object') {
-                        return o.exports;
+                    if (typeof(o) !== 'object') {
+                        invoke('util.throw_ex', 'error getting object: '+oid);    
                     }
-                    // this shouldn't happen...
-                    return o;
+                    return o.exports;
                 }
                 init: function (spec) {
                     this.postlock_instance = spec.postlock_instance;
@@ -201,7 +183,7 @@
              * with its own functions.
              */
             // ---- data object ----
-            my.base_objects.data = my.fun.merge({
+            my.base_objects.data = invoke('util.shallow_copy', [{
                 set: my.fun.op(function (value) {
                     this.set_state(new this.State(value));
                 }),
@@ -209,7 +191,7 @@
                     // return a cloned version of internal state:
                     return get_state_ref().clone().data; 
                 })
-            }, Object.create(my.common_base));
+            }, Object.create(my.common_base)]);
             my.base_objects.data.State: function (data) {
                 this.data = data;
             };
@@ -218,7 +200,7 @@
                 return new my.base_objects.data.State(cloned_data);
             };
             // ---- dict object ----
-            my.base_objects.dict = my.fun.merge({ 
+            my.base_objects.dict = invoke('util.shallow_copy', [{ 
                 set: my.fun.op(function (key, object) {
                     var state = my.get_state();
                     state.data[my.fun.key2ix(key)] = object.oid();
@@ -253,16 +235,16 @@
                     }
                     return keys;
                 })
-            }, Object.create(my.common_base));
+            }, Object.create(my.common_base)]);
             my.base_objects.dict.State: function (data) {
                 this.data = data;
             };
             my.base_objects.dict.State.prototype.clone = function() {
-                var cloned_data = my.fun.merge(this.data, {});
+                var cloned_data = invoke('util.shallow_copy', [this.data, {}]);
                 return new my.base_objects.dict.State(cloned_data);
             };
             // ---- list object ----
-            my.base_objects.list = my.fun.merge({
+            my.base_objects.list = invoke('util.shallow_copy', [{
                 // inserts cannot lead to data loss, no
                 // unsafe_insert necessary.
                 insert: my.fun.op_no_unsafe(function (pos, object) {
@@ -319,7 +301,7 @@
                     return this.get_state().data.length;
                 })
                 // TODO: queue, stack API functions
-            }, Object.create(my.common_base));
+            }, Object.create(my.common_base)]);
             my.base_objects.list.State: function (data) {
                 this.data = data;
             };
@@ -329,47 +311,31 @@
             };
  
         /* Create constructors for data types.
-         * Each type has two constructor functions: one bare-bone internal
-         * and one which adds the create operation to the current transaction.
+         * spec.oid, spec.type and spec.postlock_instance must be set!
          */
         my.fun.cons = {
-            public_cons: {}
-            private_cons: {}
-        };
-        (function() {
-            var i;
-            for (i in my.base_objects) {
-                if (my.base_objects.hasOwnProperty(i)) {
-                    // spec.postlock_instance and spec.oid must be set
-                    // for both constructors.
-                    my.fun.cons.private_cons[i] = (function() {
-                        var type = i;
-                        return function(spec) {
-                            spec.type = i;
-                            return Object.create(my.base_objects[type]).init(spec);
-                        }
-                    }());
-                    my.fun.cons.public_cons[i] = (function() {
-                        var type = i;
-                        return function(spec) {
-                            spec.postlock_instance.state.run_in_transaction(function () {
-                                // 1. create the object first
-                                var obj = my.fun.cons.private_cons[type](spec);
-                                // 2. add the 'create' op to the transaction
-                                spec.postlock_instance.state.current_transaction.add_op({
-                                    cmd: 'create',
-                                    params: [{
-                                        oid: spec.oid,
-                                        type: type,
-                                        state: spec.state // important for 'data' objects
-                                    }]
-                                });
-                            });
-                        };
-                    }());
-                }
+            make_with_create_op: function(spec) {
+                spec.postlock_instance.state.run_in_transaction(function () {
+                    // 1. create the object first
+                    var obj = my.fun.cons.make(spec);
+                    // 2. add the 'create' op to the transaction
+                    spec.postlock_instance.state.current_transaction().add_op({
+                        cmd: 'create',
+                        params: [{
+                            oid: spec.oid,
+                            type: spec.type,
+                            state: spec.state // important for 'data' objects
+                        }]
+                    });
+                    return obj;
+                });
+            },
+            make: function(spec) {
+                var obj = Object.create(my.base_objects[spec.type]).init(spec);
+                spec.postlock_instance.save_object(obj);
+                return obj;
             }
-        }());
+        };
         return my.fun.cons;
     }()));
 }());

@@ -60,10 +60,15 @@ var util = {
         }
         return to;
     },
-    shallow_copy: function (src, dest) {
+    shallow_copy: function (src, dst) {
         var i;
-        for (i in src) if (src.hasOwnProperty(i)) dest[i] = src[i];
-        return dest;
+        if (typeof(src) !== 'object') return dst;
+        for (i in src) {
+            if (src.hasOwnProperty(i)) {
+                dst[i] = src[i];
+            }
+        }
+        return dst;
     },
     get_timestamp: function () { return +new Date(); },
     retry_until: function (condition, cb_success, cb_failure, num_retries, timeout) {
@@ -108,5 +113,5 @@ var util = {
         return true;
     }
 };
-POSTLOCK.set("util", util); // end PL.util
+POSTLOCK.internal.set("util", util); // end PL.util
 })();

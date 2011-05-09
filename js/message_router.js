@@ -1,5 +1,5 @@
 (function() {
-if (POSTLOCK) POSTLOCK.set("modules.message_router", function(spec) {
+if (POSTLOCK) POSTLOCK.internal.set("modules.message_router", function(spec) {
     /* Postlock JS client message router module.
      * Responsibilities:
      * - register message routes based on from: and type: fields.

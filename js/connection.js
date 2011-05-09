@@ -1,16 +1,14 @@
 (function() {
-if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
+if (POSTLOCK) POSTLOCK.internal.set("modules.connection", function(spec) {
     var instance = this,
-        invoke = function(fun, args) {
-            var a = args || [], real_args = ('length' in a)?a:[a];
-            return POSTLOCK.get(fun).apply(instance, real_args);
-	},
-   	my = {
+        invoke = POSTLOCK.internal.make_invoke_fun(instance),
+       	my = {
         cb: spec.cb || 
             invoke("modules.callback_manager", {name:"gateway connection"}),
         url: spec.url,
         connection: null,
         state: 'idle',
+        message_id_counter: invoke("modules.counter"),
         fun: {
                 disconnect: function() {
                     if (my.state !== 'idle') {
@@ -26,7 +24,7 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                             msg: msg }]);
                     } else {
                         // add 'id' field to message
-                        msg['id'] = instance.data.connection.message_id_counter.get_value(); 
+                        msg['id'] = my.fun.get_message_id(); 
                         return my.fun.websocket_safe_send(msg);
                     }
                 },
@@ -62,27 +60,32 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                         return {username: spec.username, password: spec.password};
                     },
                     digest: function(msg_obj) {
-                        throw_ex = POSTLOCK.get("util.throw_ex");
-                        var realm = msg_obj.body.realm || throw_ex("no realm provided", {msg_body: msg_obj.bodyj});
-                        var uri = msg_obj.body.uri || throw_ex("no uri provided", {msg_body: msg_obj.bodyj});
-                        var nonce = msg_obj.body.nonce || throw_ex("no nonce provided", {msg_body: msg_obj.bodyj});
-                        var opaque = msg_obj.body.opaque || throw_ex("no opaque provided", {msg_body: msg_obj.bodyj});
-                        var algorithm = msg_obj.body.algorithm || throw_ex("no algorithm provided", {msg_body: msg_obj.bodyj});
-                        var alg_impl = POSTLOCK.get('util.crypto.'+algorithm);
+                        var realm = msg_obj.body.realm || 
+                                invoke('util.throw_ex', ["no realm provided", {msg_body: msg_obj.body}]),
+                            uri = msg_obj.body.uri || 
+                                invoke('util.throw_ex', ["no uri provided", {msg_body: msg_obj.body}]),
+                            nonce = msg_obj.body.nonce || 
+                                invoke('util.throw_ex', ["no nonce provided", {msg_body: msg_obj.body}]),
+                            opaque = msg_obj.body.opaque || 
+                                invoke('util.throw_ex', ["no opaque provided", {msg_body: msg_obj.body}]),
+                            algorithm = msg_obj.body.algorithm || 
+                                invoke('util.throw_ex', ["no algorithm provided", {msg_body: msg_obj.body}]),
+                            alg_impl = POSTLOCK.internal.get('util.crypto.'+algorithm),
+                            qop, HA1, HA2, nc, cnonce, response;
+
                         if (typeof(alg_impl) !== "function") {
-                            throw_ex("algorithm not implemented", {algorithm: algorithmj});
+                            invoke('util.throw_ex', ["algorithm not implemented", {algorithm: algorithmj}]);
                         }
-                        var qop = msg_obj.body.qop || throw_ex("no qop provided", {msg_body: msg_obj.bodyj});
+                        qop = msg_obj.body.qop || 
+                            invoke('util.throw_ex', ["no qop provided", {msg_body: msg_obj.body}]);
                         if (qop != "auth") {
-                            throw_ex("qop not supported", {qop: qop});
+                            invoke('util.throw_ex', ["qop not supported", {qop: qop}]);
                         }
-
-                        var HA1 = alg_impl([spec.username, realm, spec.password].join(":"));
-                        var HA2 = alg_impl(["POST", uri].join(":"));
-                        var nc = "00000001";
-                        var cnonce =  Math.random().toString();
-                        var response = alg_impl([HA1, nonce, nc, cnonce, qop, HA2].join(":"));
-
+                        HA1 = alg_impl([spec.username, realm, spec.password].join(":"));
+                        HA2 = alg_impl(["POST", uri].join(":"));
+                        nc = "00000001";
+                        cnonce =  Math.random().toString();
+                        response = alg_impl([HA1, nonce, nc, cnonce, qop, HA2].join(":"));
                         return {
                             username: spec.username,
                             nc: nc,
@@ -107,13 +110,13 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                         switch (msg_obj.type) {
                             case "auth_challenge": 
                                 if (!("challenge_type" in msg_obj.body)) {
-                                    throw_ex("bad auth challenge", {challenge: msg_obj});
+                                    invoke('util.throw_ex', ["bad auth challenge", {challenge: msg_obj}]);
                                 }
                                 if (!(msg_obj.body["challenge_type"] in my.fun.auth)) {
-                                    throw_ex(
+                                    invoke('util.throw_ex', [
                                         "unsupported auth type: "+ msg_obj.body["challenge_type"],
                                         {challenge: msg_obj}
-                                    );
+                                    ]);
                                 }
                                 my.fun.websocket_safe_send({
                                     id: my.fun.get_message_id(), 
@@ -152,12 +155,8 @@ if (POSTLOCK) POSTLOCK.set("modules.connection", function(spec) {
                 }   // end handle_incoming_msg
             }       // end fun
         };          // end my
-        // connection-related data for instance:
-        instance.data.connection = {};
-        // create counter for message id:
-        instance.data.connection.message_id_counter = invoke("modules.counter");
         // create utility function for getting next message id
-        my.fun.get_message_id = function() {return instance.data.connection.message_id_counter.get_value();};
+        my.fun.get_message_id = function() {return my.message_id_counter.get_value();};
         my.fun.handle_incoming_msg.current = my.fun.handle_incoming_msg.idle;
         // Register callbacks
         // handle incoming message from server
