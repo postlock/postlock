@@ -264,7 +264,8 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
         }
         this.context = new my.fun.Context({
             backing_context: 
-                my.fun.current_transaction().context,
+                (my.fun.current_transaction()? 
+                    my.fun.current_transaction().context: null),
             transaction: this
         });
     };
@@ -278,8 +279,8 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
         this.server_state_version = my.server_state_version;
         // If this is the only waiting transaction
         // then send it to the server right away.
-        if (transaction_queue.length > 0) {
-            transaction_queue.flush();
+        if (my.transaction_queue.length > 0) {
+            my.transaction_queue.flush();
         }
     };
     my.fun.Transaction.prototype.send = function() {
@@ -325,7 +326,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
     };
     my.fun.run_remote_transaction = function(msg) {
         var i, fun, obj,
-            make_err: function(reason, e) {
+            make_err = function(reason, e) {
                 var err = {
                     success: false,
                     reason: reason,

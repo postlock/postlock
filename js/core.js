@@ -41,14 +41,14 @@ if (typeof Object.create !== 'function') {
             make_new: function(spec) {
                 return my.fun.get("modules.instance")(spec);
             },
-            make_invoke_fun(instance) {
+            make_invoke_fun: function(instance) {
                 return function (fun, args) {
                     var a = (args === undefined)?[]:args;
                         if (typeof(a) === 'string' ||
-                            !('length' in a)) {
+                            (typeof(a) === 'object' && !('length' in a))) {
                             a = [a];
                         }
-                    return POSTLOCK.get(fun).apply(instance, a);
+                    return my.fun.get(fun).apply(instance, a);
                 };
             }
         }

@@ -43,24 +43,24 @@
     if (!POSTLOCK) return;
     POSTLOCK.internal.set("modules.datatypes", (function () {
             // invoke is not bound to a postlock instance
-        var invoke = POSTLOCK.internal.make_invoke_fun(null);
+        var invoke = POSTLOCK.internal.make_invoke_fun(null),
             my = {
                 constants: {
-                    UNSAFE_PREFIX = "unsafe_",
-                    DICT_PREFIX = "entry_"
+                    UNSAFE_PREFIX: "unsafe_",
+                    DICT_PREFIX: "entry_"
                 },
                 fun: {
                     // functions to add metadata to other functions
-                    api = function(fun) {
+                    api: function(fun) {
                         fun.type = 'api';
                         return fun;
                     },
-                    op = function(fun) {
+                    op: function(fun) {
                         fun.type = 'op';
                         fun.has_unsafe = true;
                         return fun;
                     },
-                    op_no_unsafe = function(fun) {
+                    op_no_unsafe: function(fun) {
                         fun.type = 'op';
                         fun.has_unsafe = false;
                         return fun;
@@ -71,7 +71,7 @@
                     },
                     ix2key: function (ix) {
                         return ix.substr(my.constants.DICT_PREFIX.length);
-                    },
+                    }
                 } // end my.fun
             }; // end my
             my.common_base = {
@@ -81,7 +81,7 @@
                     var i, 
                         exports = {}, 
                         obj_instance = this, 
-                        add_op_to_transaction: function (is_safe, op, args) {
+                        add_op_to_transaction = function (is_safe, op, args) {
                             // 1. Performs the operation locally
                             // 2. Adds the operation to the current transaction.
                             // This order is important because if the operation failes
@@ -121,22 +121,22 @@
                                         }
                                     }());
                                     break;
-                                case 'op';
+                                case 'op':
                                     // op functions call invoke_op.
                                     // depending on the has_unsafe field,
                                     // there may be an 'unsafe_' version
                                     // exported as well.
-                                    (function () {
+                                    (function (o) {
                                         var ix = i;
                                         exports[ix] = function() {
                                             return add_op_to_transaction(true, ix, arguments);
                                         };
-                                        if (this[ix].has_unsafe === true) {
+                                        if (o[ix].has_unsafe === true) {
                                             exports[my.constants.UNSAFE_PREFIX + ix] = function() {
                                                 return add_op_to_transaction(false, ix, arguments);
                                             };
                                         }
-                                    }());
+                                    }(this));
                                     break;
                                 default:
                                     // this shouldn't ever happen
@@ -166,16 +166,17 @@
                         invoke('util.throw_ex', 'error getting object: '+oid);    
                     }
                     return o.exports;
-                }
+                },
                 init: function (spec) {
                     this.postlock_instance = spec.postlock_instance;
-                    this.oid = spec.oid;
+                    this.object_oid = spec.oid;
                     this.exports = this.make_exports();
                     this.set_state(new this.State(spec.state));
+                    return this;
                 },
                 oid: my.fun.api(function() {
-                    return this.oid;
-                }),
+                    return this.object_oid;
+                })
             };
             my.base_objects = {};
             /* The prototypes for the different data types follow.
@@ -192,7 +193,7 @@
                     return get_state_ref().clone().data; 
                 })
             }, Object.create(my.common_base)]);
-            my.base_objects.data.State: function (data) {
+            my.base_objects.data.State = function (data) {
                 this.data = data;
             };
             my.base_objects.data.State.prototype.clone = function() {
@@ -236,7 +237,7 @@
                     return keys;
                 })
             }, Object.create(my.common_base)]);
-            my.base_objects.dict.State: function (data) {
+            my.base_objects.dict.State = function (data) {
                 this.data = data;
             };
             my.base_objects.dict.State.prototype.clone = function() {
@@ -302,7 +303,7 @@
                 })
                 // TODO: queue, stack API functions
             }, Object.create(my.common_base)]);
-            my.base_objects.list.State: function (data) {
+            my.base_objects.list.State = function (data) {
                 this.data = data;
             };
             my.base_objects.list.State.prototype.clone = function() {
@@ -314,8 +315,13 @@
          * spec.oid, spec.type and spec.postlock_instance must be set!
          */
         my.fun.cons = {
+            make: function(spec) {
+                var obj = Object.create(my.base_objects[spec.type]).init(spec);
+                spec.postlock_instance.state.save_object(obj);
+                return obj;
+            },
             make_with_create_op: function(spec) {
-                spec.postlock_instance.state.run_in_transaction(function () {
+                return spec.postlock_instance.state.run_in_transaction(function () {
                     // 1. create the object first
                     var obj = my.fun.cons.make(spec);
                     // 2. add the 'create' op to the transaction
@@ -329,11 +335,6 @@
                     });
                     return obj;
                 });
-            },
-            make: function(spec) {
-                var obj = Object.create(my.base_objects[spec.type]).init(spec);
-                spec.postlock_instance.save_object(obj);
-                return obj;
             }
         };
         return my.fun.cons;

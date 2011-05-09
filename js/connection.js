@@ -194,7 +194,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.connection", function(spec) {
         my.cb.set_internal_cb("error", function() {
             // On a remote error, the server will close the
             // websocket, we we don't have to.
-            if (args[0] !== 'remote_error') my.fun.disconnect();
+            if (arguments[0] !== 'remote_error') my.fun.disconnect();
         });
         // return exports
         return {

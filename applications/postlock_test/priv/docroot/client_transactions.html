@@ -11,28 +11,37 @@
 <script type="text/javascript" src="http://localhost:8081/instance.js"></script>
 <script type="text/javascript" src="http://localhost:8081/counter.js"></script>
 <script type="text/javascript" src="http://localhost:8081/datatypes.js"></script>
-<script type="text/javascript" src="http://localhost:8081/state_storage.js"></script>
+<script type="text/javascript" src="http://localhost:8081/state.js"></script>
 <script type="text/javascript" src="testlib.js"></script>
 <script type="text/javascript">
-var postlock_instance;
+var dbg;
 $(document).ready(function(){
-    module("client_transactions");
+//    module("client_transactions");
 
-    test("create data object", function() {
+//    test("create data object", function() {
         var clients = connect_clients({
                 url: get_backend_url(),
-                users: [{username: "test_username_0", password: "test_password_0"}],
+                users: [
+                    {username: "test_username_0", password: "test_password_0"},
+                    {username: "test_username_1", password: "test_password_1"}
+                ],
                 on_all_connected: function() {
-                   postlock_instace = clients[0].postlock;
-                   equal(true, true, 'dummy test');
-                   start();
+                    clients[1].postlock.set_cb('participant_message', function() {   
+                        console.dir(arguments);
+                    });
+                    try {
+                        clients[0].postlock.make_data("asdf");
+                    } catch(e) {
+                        console.log(e.stack);
+                    }
+                    equal(true, true, 'dummy test');
+                    start();
                 }
             });
-        expect(1);
-        stop();
+//        expect(1);
+//        stop();
         //equal(clients[recipient_ix].received, clients[i].sent, "user "+i+"'s message was received by user "+recipient_ix);
-    });
- 
+//    });
 }); // ready()
 </script>
 </head>

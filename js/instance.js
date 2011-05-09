@@ -38,7 +38,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.instance", function(spec) {
         fallback_destination:  instance.cb.wrap_signal("no_destination_for_message")
     });
     instance.state = invoke("modules.state");
-    instance.oid_counter = invoke("modules.counter", 1);
+    instance.oid_counter = invoke("modules.counter", [1]);
     // ---- message routing configuration ----
     // All incoming messages are sent to the message router.
     instance.cb.set_internal_cb('participant_message', 
