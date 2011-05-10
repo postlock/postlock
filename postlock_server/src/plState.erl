@@ -108,17 +108,10 @@ handle_cast({transaction_result, Transaction, {plStorageTerm, Storage}}, State) 
     Iter = plStorageTerm:iterator(Storage),
     State2 = merge_transaction_result(plStorageTerm:next(Iter), State1),
 
-    gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
+    gen_server:cast(State2#state.session_server, {broadcast, #pl_client_msg{
         id = MsgId,
         from = 1,
-        to = 2,
-        type = "participant_message",
-        body = Transaction
-    }}),
-    gen_server:cast(State2#state.session_server, {deliver_message, #pl_client_msg{
-        from = 1,
-        to = 3,
-        type = "participant_message",
+        type = "transaction",
         body = Transaction
     }}),
     {noreply, State2};

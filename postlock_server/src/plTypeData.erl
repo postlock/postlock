@@ -7,12 +7,14 @@
 %%%-------------------------------------------------------------------
 
 -module(plTypeData).
-
--export([new_obj/1, get_oid/1, execute/2, xform/2]).
+-compile(export_all).
 -define(DEFAULT_VALUE, undefined).
 
 new_obj(Oid) ->
     {Oid, ?DEFAULT_VALUE}.
+
+new_obj(Oid, State) ->
+    {Oid, State}.
 
 get_oid({Oid, _}) ->
     Oid.

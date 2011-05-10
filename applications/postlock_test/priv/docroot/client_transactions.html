@@ -14,28 +14,29 @@
 <script type="text/javascript" src="http://localhost:8081/state.js"></script>
 <script type="text/javascript" src="testlib.js"></script>
 <script type="text/javascript">
-var dbg;
+var clients;
 $(document).ready(function(){
 //    module("client_transactions");
 
 //    test("create data object", function() {
-        var clients = connect_clients({
+        clients = connect_clients({
                 url: get_backend_url(),
                 users: [
                     {username: "test_username_0", password: "test_password_0"},
                     {username: "test_username_1", password: "test_password_1"}
                 ],
                 on_all_connected: function() {
-                    clients[1].postlock.set_cb('participant_message', function() {   
-                        console.dir(arguments);
-                    });
                     try {
-                        clients[0].postlock.make_data("asdf");
+                        console.dir(clients[0].postlock.make_data("asdf").oid());
                     } catch(e) {
                         console.log(e.stack);
                     }
-                    equal(true, true, 'dummy test');
-                    start();
+//                    equal(true, true, 'dummy test');
+//                    start();
+                },
+                on_failure: function() {
+                    console.error('somthing bad happened');
+                    console.dir(arguments);
                 }
             });
 //        expect(1);

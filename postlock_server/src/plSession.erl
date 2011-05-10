@@ -181,6 +181,19 @@ handle_cast({deliver_message, #pl_client_msg{to=To}=Msg},
             deliver_message(Msg, Participants)
     end,
     {noreply, State};
+%% This is a little hacky...
+handle_cast({broadcast, Msg}, 
+    #state{participants=Participants}=State) ->
+    [begin
+        {_, Participant} = P,
+        To = Participant#pl_participant.id,
+        case To > 1 of
+            false -> noop;
+            true -> deliver_message(Msg#pl_client_msg{to=To}, Participants)
+        end
+    end || P <- gb_trees:to_list(Participants)],
+    {noreply, State};
+ 
  
 handle_cast(Msg, State) ->
     error_logger:warning_report(["plSession:handle_cast/2: unhandled message",

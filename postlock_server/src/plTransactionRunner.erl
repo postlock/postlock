@@ -97,11 +97,18 @@ perform_ot(Operation, {Oid, Cmd, Params, StateServerPid}) ->
             {Oid, Cmd, Params, StateServerPid}
     end.
 
-execute_operation(_, create, _Params=[Oid,Type|_], Objects, _StateServerPid) ->
-    case Type of
-        "data" -> Obj = plObject:new_obj(plTypeData, Oid);
-        "dict" -> Obj = plObject:new_obj(plTypeDict, Oid);
-        "list" -> Obj = plObject:new_obj(plTypeList, Oid)
+execute_operation(_, create, _Params=[P], Objects, _StateServerPid) ->
+    % If oid or type is missing, allow a badmatch
+    % exception to be generated, which should be handled by the caller
+    {ok, Oid} = plMessage:json_get_value([oid], P),
+    {ok, Type} = plMessage:json_get_value([type], P),
+    {HasInitialState, State} = plMessage:json_get_value([type], P),
+
+    Obj = case {HasInitialState, Type} of
+        {ok, "data"} -> plObject:new_obj(plTypeData, Oid, State);
+        {_, "data"} -> plObject:new_obj(plTypeData, Oid);
+        {_, "dict"} -> plObject:new_obj(plTypeDict, Oid);
+        {_, "list"} -> plObject:new_obj(plTypeList, Oid)
     end,
     plObject:store(Obj, Objects);
 execute_operation(_, delete, _Params=[Oid|_], Objects, _StateServerPid) ->

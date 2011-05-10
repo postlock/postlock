@@ -117,7 +117,7 @@
                                     exports[i] = (function () {
                                         var ix = i;
                                         return function() {
-                                            obj_instance[ix](arguments);
+                                            return obj_instance[ix](arguments);
                                         }
                                     }());
                                     break;
@@ -144,6 +144,8 @@
                             }
                         }
                     }
+                    // Finally, add the callback manager's set_user_cb to the exports object.
+                    exports.set_cb = obj_instance.cb.set_user_cb;
                     return exports;
                 },     
                 // Since context can change, there should be no references to state
@@ -170,6 +172,9 @@
                 init: function (spec) {
                     this.postlock_instance = spec.postlock_instance;
                     this.object_oid = spec.oid;
+                    this.cb = this.postlock_instance.invoke("modules.callback_manager", {
+                        name: "callback manager for "+spec.type+" with oid "+spec.oid
+                    });
                     this.exports = this.make_exports();
                     this.set_state(new this.State(spec.state));
                     return this;
@@ -190,7 +195,7 @@
                 }),
                 get: my.fun.api(function () {
                     // return a cloned version of internal state:
-                    return get_state_ref().clone().data; 
+                    return this.get_state_ref().clone().data; 
                 })
             }, Object.create(my.common_base)]);
             my.base_objects.data.State = function (data) {

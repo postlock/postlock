@@ -140,16 +140,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.connection", function(spec) {
                         // In the connected state, we will decide what to do with the object based on the 
                         // 'type' field. The default is to pass the message to the user callback.
                         if (!('type' in msg_obj)) return false;
-                        switch (msg_obj['type']) {
-                            case 'transaction':
-                                // STUB
-                                break;
-                            case 'acked_message':
-                                // STUB
-                                break;
-                            default:
-                                my.cb.fire_async('participant_message', [msg_obj]);
-                        };
+                        my.cb.fire_async('participant_message', [msg_obj]);
                         return true;
                     }
                 }   // end handle_incoming_msg
@@ -189,7 +180,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.connection", function(spec) {
         });
         my.cb.set_internal_cb("ws_error", function () {
             // forward this to the signal handler for 'error'.
-            my.cb.fire_async('error', ['websocket', ex, invoke("util.args2array",arguments)]);
+            my.cb.fire_async('error', ['websocket', invoke("util.args2array",[arguments])]);
         });
         my.cb.set_internal_cb("error", function() {
             // On a remote error, the server will close the

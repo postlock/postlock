@@ -16,6 +16,8 @@
 %%%-------------------------------------------------------------------
 
 new_obj(Mod, Oid) -> {Mod, apply(Mod, new_obj, [Oid])}.
+% throws an exception if there is no such function:
+new_obj(Mod, Oid, State) -> {Mod, apply(Mod, new_obj, [Oid, State])}.
 get_oid({Mod, Obj}) -> apply(Mod, get_oid, [Obj]).
 execute({Mod, Obj}, Cmd) -> {Mod, apply(Mod, execute, [Cmd, Obj])}.
 xform({Mod, _Obj}, Op1, Op2) -> apply(Mod, xform, [Op1, Op2]).

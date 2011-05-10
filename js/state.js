@@ -285,23 +285,40 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
     };
     my.fun.Transaction.prototype.send = function() {
         this.msg = {
-            state_version: my.server_state_version,
-            ops: this.ops
+            to: 1, // hardcoded for now
+            type: 'transaction',
+            body: {
+                state_version: my.server_state_version,
+                ops: this.ops
+            }
         };
         instance.connection.send(this.msg);
     };
     // ---- processing incoming messages ----
     my.fun.ack_transaction = function() {
+        var do_merge = function() {
+                // merge the acknowledged transaction into the
+                // acknowledged context
+                my.acknowledged_transaction.context.merge(
+                    my.transaction_queue[0].context);
+                // get rid of the transaction
+                my.transaction_queue.shift();
+            };
         my.transaction_queue.waiting_for_server = false;
-        // merge the acknowledged transaction into the
-        // acknowledged context
-        my.acknowledged_transaction.context.merge(
-            my.transaction_queue[0].context);
-        // get rid of the transaction
-        my.transaction_queue.shift();
-        // as merge and remote transactions at the head of
+        // Merge any remote transactions at the head of
         // the queue.
-        my.transaction_queue.flush();
+        do_merge();
+        while (my.transaction_queue.length > 0 &&
+                my.transaction_queue[0].local === false) {
+            do_merge();                
+        }
+        // update current transaction context's backing transaction.
+        if (my.transaction_queue.length > 0) {
+            my.transaction_queue[0].backing_context = 
+                my.acknowledged_transaction.context;
+            // send the next local transaction to the server
+            my.transaction_queue.flush();
+        }
     };
     my.fun.receive_transaction = function (msg) {
         // The incoming message is either a broadcast of someone
@@ -395,7 +412,13 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
         // ---- to be exported to the api user ----
         exports: {
             run_in_transaction: my.fun.run_in_transaction,
-            get_object: my.fun.get_object
+            get_object: function(oid) {
+                var obj = my.fun.get_object(oid);
+                if (typeof(obj) === 'object') {
+                    return obj.exports;
+                }
+                return obj;
+            }
         }
     };
 }); 
