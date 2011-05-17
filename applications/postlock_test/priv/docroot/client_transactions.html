@@ -16,9 +16,9 @@
 <script type="text/javascript">
 var clients;
 $(document).ready(function(){
-//    module("client_transactions");
+    module("client_transactions");
 
-//    test("create data object", function() {
+    test("create data object", function() {
         clients = connect_clients({
                 url: get_backend_url(),
                 users: [
@@ -26,24 +26,21 @@ $(document).ready(function(){
                     {username: "test_username_1", password: "test_password_1"}
                 ],
                 on_all_connected: function() {
-                    try {
-                        console.dir(clients[0].postlock.make_data("asdf").oid());
-                    } catch(e) {
-                        console.log(e.stack);
-                    }
-//                    equal(true, true, 'dummy test');
-//                    start();
+                    var obj_sent = clients[0].postlock.make_data("asdf");
+                    clients[1].postlock.set_cb('create', function(obj_recv) {
+                        equal(obj_recv.oid(), obj_sent.oid(), 'oid of object is preserved across clients');
+                        start();
+                    });
                 },
                 on_failure: function() {
                     console.error('somthing bad happened');
                     console.dir(arguments);
                 }
             });
-//        expect(1);
-//        stop();
-        //equal(clients[recipient_ix].received, clients[i].sent, "user "+i+"'s message was received by user "+recipient_ix);
-//    });
-}); // ready()
+        expect(1);
+        stop();
+    });
+}); 
 </script>
 </head>
 <body>

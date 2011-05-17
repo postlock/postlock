@@ -14,20 +14,23 @@
 
 %% #postlock_transaction
 -include("plState.hrl").
+% Required for #pl_client_msg
+-include("plMessage.hrl").
+
 
 init(StateServerPid) ->
     listen_loop(StateServerPid).
 
 listen_loop(StateServerPid) ->
     receive
-        {transaction, Transaction, TransTable} ->
-            {ok, FromStateVersion} = plMessage:json_get_value([state_version], Transaction),
+        {transaction, TransactionMsg, TransTable} ->
+            {ok, FromStateVersion} = plMessage:json_get_value([state_version], TransactionMsg#pl_client_msg.body),
             CurrentStateVersion = gen_server:call(StateServerPid, {get_state_version}),
             PreviousTransactions = if FromStateVersion < CurrentStateVersion ->
                 get_transactions(TransTable, FromStateVersion + 1);
                 true -> []
             end,
-            try process_transaction(Transaction, CurrentStateVersion, PreviousTransactions, StateServerPid) of
+            try process_transaction(TransactionMsg, CurrentStateVersion, PreviousTransactions, StateServerPid) of
                 {ResultStorage, ModifiedTransaction} ->
                     gen_server:cast(StateServerPid, {transaction_result, ModifiedTransaction, ResultStorage})
             catch
@@ -41,12 +44,19 @@ listen_loop(StateServerPid) ->
     end.
 
 % TODO: error handling
-process_transaction(Transaction, CurrentStateVersion, PreviousTransactions, StateServerPid) ->
-    {ok, {array, Operations}} = plMessage:json_get_value([ops], Transaction),
+process_transaction(TransactionMsg, CurrentStateVersion, PreviousTransactions, StateServerPid) ->
+    {ok, {array, Operations}} = plMessage:json_get_value([ops], TransactionMsg#pl_client_msg.body),
     {Result, ModifiedOps, _, _} = lists:foldl(fun process_operation/2, {plObject:new_state(plStorageTerm), [], PreviousTransactions, StateServerPid}, Operations),
-    ModifiedTransaction0 = json:obj_store("state_version", CurrentStateVersion, json:obj_new()),
-    ModifiedTransaction1 = json:obj_store("ops", {array, ModifiedOps}, ModifiedTransaction0),
-    {Result, ModifiedTransaction1}.
+    ModifiedTransaction = {struct, [
+        {state_version, CurrentStateVersion},
+        {ops, {array, ModifiedOps}},
+        {in_response_to, get_in_response_to(TransactionMsg)}]},
+    {Result, ModifiedTransaction}.
+
+get_in_response_to(#pl_client_msg{
+        id=Id,
+        from=From
+    }) -> erlang:integer_to_list(From) ++ [$.] ++ erlang:integer_to_list(Id).
 
 process_operation(Operation, {Objects, ModifiedOps, PreviousTransactions, StateServerPid}) ->
     {Oid, Cmd, Params} = get_operation_data(Operation),

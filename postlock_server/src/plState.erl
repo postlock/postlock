@@ -125,11 +125,11 @@ handle_cast(Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
-handle_info({participant_message, #pl_client_msg{}=Msg}, State) ->
+handle_info({participant_message, Msg}, State) ->
     case Msg#pl_client_msg.type of
         "transaction" ->
             TransTable = transaction_table_name(State#state.sessionid),
-            State#state.transaction_runner ! {transaction, Msg#pl_client_msg.body, TransTable}
+            State#state.transaction_runner ! {transaction, Msg, TransTable}
     end,
     {noreply, State};
 handle_info(_Info, State) ->

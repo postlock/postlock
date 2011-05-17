@@ -43,7 +43,7 @@
 (function() {
 if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
     var instance = this,
-        invoke = POSTLOCK.internal.make_invoke_fun(instance);
+        invoke = POSTLOCK.internal.make_invoke_fun(instance),
         my = {
             // Transactions will most likely fail on the server,
             // but local failure cannot be ruled out, which will
@@ -77,6 +77,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
         // queue to the server, then do it.
         if (my.transaction_queue.length === 0 ||
             my.transaction_queue[0].open ||
+            !(my.transaction_queue[0].local) ||
             my.transaction_queue.waiting_for_server) {
             return false;
         }
@@ -129,7 +130,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
     // Creates a "participantid.messageid" format
     // string used in 'in_response_to' field of the server's ACKs.
     my.fun.in_response_to_msg_id = function(msg_id) {
-        return instance.exports.participant_id + "." + msg_id;
+        return instance.exports.participant_id() + "." + msg_id;
     };
     // regular javascript constructor (to be used with new)
     // to create a context object.
@@ -327,7 +328,7 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
             my.transaction_queue.length > 0 &&
             my.transaction_queue[0].open === false &&
             my.fun.in_response_to_msg_id(my.transaction_queue[0].msg.id) === 
-                msg.body.in_respone_to) {
+                msg.body.in_response_to) {
             my.fun.ack_transaction();
         } else {
             my.fun.run_remote_transaction(msg);
@@ -342,61 +343,86 @@ if (POSTLOCK) POSTLOCK.internal.set("modules.state", function(spec) {
     my.fun.receive_transaction_error = function (msg) {
     };
     my.fun.run_remote_transaction = function(msg) {
-        var i, fun, obj,
-            make_err = function(reason, e) {
+        var i, make_err = function(reason, e) {
                 var err = {
                     success: false,
                     reason: reason,
-                    failed_op: i
+                    failed_op: i,
+                    signals: [{
+                        callback_manager: instance.cb, // TODO?
+                        signal: 'rollback'
+                    }]
                 };
                 if (e) {
                     err.exception = e;
                 }
                 return err;
-            };
-        my.fun.run_in_transaction(function () {
-            for (i = 0; i < msg.body.ops.length; i++) {
-                if (msg.body.ops[i].hasOwnProperty('oid')) {
-                    // if the op has a 'oid' field, pass it to the
-                    // associated object
-                    obj = my.fun.get_object(msg.body.ops[i].oid);
-                    if (obj === undefined) {
-                        return make_err(my.error_msg.INVALID_OID);
-                    }
-                    fun = obj[msg.body.ops[i].cmd];
-                    if (typeof(fun) !== 'function') {
-                        return make_err(my.error_msg.INVALID_CMD);
-                    }
-                    try {
-                        obj[fun].apply(obj, msg.body.ops[i].params) 
-                    } catch (e) {
-                        return make_err(my.error_msg.INVALID_PARAMS, e);
-                    }
-                } else {
-                    // the operation is a create or delete
-                    switch (msg.body.ops[i].cmd) {
-                        case 'create':
-                            invoke('modules.datatypes.make',
-                                invoke('util.shallow_copy', [
-                                    msg.body.ops[i].params[0],
-                                    {postlock_instance: instance}
-                                ])
-                            );
-                            break;
-                        case 'delete':
-                            console.dir('STUB');
-                            invoke('util.throw_ex', 'STUB');
-                            break;
-                        default:
-                            invoke(
-                                'util.throw_ex', 
-                                ['bad cmd in op', msg.body.ops[i]]
-                            );
+            },
+            result = my.fun.run_in_transaction(function () {
+                var fun, obj, signals = [];
+                for (i = 0; i < msg.body.ops.length; i++) {
+                    if (msg.body.ops[i].hasOwnProperty('oid')) {
+                        // if the op has a 'oid' field, pass it to the
+                        // associated object
+                        obj = my.fun.get_object(msg.body.ops[i].oid);
+                        if (obj === undefined) {
+                            return make_err(my.error_msg.INVALID_OID);
+                        }
+                        fun = obj[msg.body.ops[i].cmd];
+                        if (typeof(fun) !== 'function') {
+                            return make_err(my.error_msg.INVALID_CMD);
+                        }
+                        try {
+                            obj[fun].apply(obj, msg.body.ops[i].params);
+                            // register signal to pass callback manager
+                            signals.push({
+                                callback_manager: obj.cb,
+                                signal: msg.body.ops[i].cmd,
+                                args: msg.body.ops[i].params
+                            });
+                        } catch (e) {
+                            return make_err(my.error_msg.INVALID_PARAMS, e);
+                        }
+                    } else {
+                        // the operation is a create or delete
+                        switch (msg.body.ops[i].cmd) {
+                            case 'create':
+                                obj = invoke('modules.datatypes.make',
+                                    invoke('util.shallow_copy', [
+                                        msg.body.ops[i].params[0],
+                                        {postlock_instance: instance}
+                                    ])
+                                );
+                                // register signal to pass callback manager
+                                signals.push({
+                                    callback_manager: instance.cb,
+                                    signal: 'create',
+                                    args: [obj]
+                                });
+                                break;
+                            case 'delete':
+                                console.dir('STUB');
+                                invoke('util.throw_ex', 'STUB');
+                                break;
+                            default:
+                                invoke(
+                                    'util.throw_ex', 
+                                    ['bad cmd in op', msg.body.ops[i]]
+                                );
+                        }
                     }
                 }
-            }
-            return {success: true};
-        }, msg);
+                return {
+                    success: true,
+                    signals: signals
+                };
+            }, msg);
+        // fire callback signals is successful
+        for (i = 0; i < result.signals.length; i++) {
+            result.signals[i].callback_manager.fire(
+                result.signals[i].signal, 
+                result.signals[i].args);
+        }
     };
     // ---- initialize internal data structures ----
     my.acknowledged_transaction = new my.fun.Transaction();
