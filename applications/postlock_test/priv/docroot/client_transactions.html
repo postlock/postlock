@@ -14,31 +14,47 @@
 <script type="text/javascript" src="http://localhost:8081/state.js"></script>
 <script type="text/javascript" src="testlib.js"></script>
 <script type="text/javascript">
-var clients;
-$(document).ready(function(){
-    module("client_transactions");
+var timestamp;
+var define_unit_tests = function (clients) {
+    module("client_transactions", {
+        'setup': function() {
+            timestamp = +new Date();
+        },
+        'teardown': function() {
+            var delta = +new Date() - timestamp;
+            console.log('test run in '+delta+' ms');
+        }
+    });
 
     test("create data object", function() {
-        clients = connect_clients({
-                url: get_backend_url(),
-                users: [
-                    {username: "test_username_0", password: "test_password_0"},
-                    {username: "test_username_1", password: "test_password_1"}
-                ],
-                on_all_connected: function() {
-                    var obj_sent = clients[0].postlock.make_data("asdf");
-                    clients[1].postlock.set_cb('create', function(obj_recv) {
-                        equal(obj_recv.oid(), obj_sent.oid(), 'oid of object is preserved across clients');
-                        start();
-                    });
-                },
-                on_failure: function() {
-                    console.error('somthing bad happened');
-                    console.dir(arguments);
-                }
-            });
-        expect(1);
+        var obj_sent = clients[0].postlock.make_data({a: "asdf", b: 2});
+        clients[1].postlock.set_cb('create', function(obj_recv) {
+            equal(obj_recv.oid(), obj_sent.oid(), 'oid of object is preserved across clients');
+            deepEqual(obj_recv.get(), obj_sent.get(), 'value of object is preserved across clients');
+            start();
+        });
+        expect(2);
         stop();
+    });
+
+};
+
+$(document).ready(function () {
+    var clients;
+    clients = connect_clients({
+        url: get_backend_url(),
+        users: [
+            {username: "test_username_0", password: "test_password_0"},
+            {username: "test_username_1", password: "test_password_1"}
+        ],
+        on_all_connected: function() {
+            QUnit.config.autorun = true;
+            define_unit_tests(clients);
+        },
+        on_failure: function() {
+            console.error('somthing bad happened');
+            console.dir(arguments);
+        }
     });
 }); 
 </script>
