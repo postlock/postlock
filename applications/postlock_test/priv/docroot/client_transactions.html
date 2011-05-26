@@ -37,6 +37,28 @@ var define_unit_tests = function (clients) {
         stop();
     });
 
+    test("create dict object", function() {
+        var obj_sent = clients[0].postlock.make_dict();
+        clients[1].postlock.set_cb('create', function(obj_recv) {
+            equal(obj_recv.oid(), obj_sent.oid(), 'oid of object is preserved across clients');
+            start();
+        });
+        expect(1);
+        stop();
+    });
+
+    test("create list object", function() {
+        var obj_sent = clients[0].postlock.make_list();
+        clients[1].postlock.set_cb('create', function(obj_recv) {
+            equal(obj_recv.oid(), obj_sent.oid(), 'oid of object is preserved across clients');
+            start();
+        });
+        expect(1);
+        stop();
+    });
+
+
+
 };
 
 $(document).ready(function () {
